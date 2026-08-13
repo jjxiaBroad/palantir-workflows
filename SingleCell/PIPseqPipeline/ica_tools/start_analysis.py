@@ -5,7 +5,8 @@ export_pipeline_to_ica.py.
 
 Prompts for which ICA project to run in, which already-imported PIPseq pipeline to run
 (flagging whichever one's commit matches the current git HEAD), and which of the
-test/test_inputs_main.json / test/test_inputs_main_simple.json input files to submit.
+test/test_inputs_main.json / test/test_inputs_main_simple.json / test/test_inputs_downsample.json
+input files to submit.
 
 File/folder inputs in those JSON files are given as project-relative paths (matching how
 they appear in the ICA project's data tree) rather than ICA data IDs -- this script resolves
@@ -36,6 +37,7 @@ PIPELINE_NAME_PREFIX = 'PIPseq_BCL'
 TEST_INPUT_FILES = {
     'main.nf (test/test_inputs_main.json)': os.path.join(pipeline_root, 'test', 'test_inputs_main.json'),
     'main_simple.nf (test/test_inputs_main_simple.json)': os.path.join(pipeline_root, 'test', 'test_inputs_main_simple.json'),
+    'downsample.nf (test/test_inputs_downsample.json)': os.path.join(pipeline_root, 'test', 'test_inputs_downsample.json'),
 }
 
 

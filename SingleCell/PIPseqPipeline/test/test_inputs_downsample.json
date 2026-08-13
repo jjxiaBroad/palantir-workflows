@@ -1,0 +1,14 @@
+{
+    "samplesheet": "/experiments/MDL-1898/downsample_batch/samplesheet.csv",
+    "dragen_results_dirs": [
+        "/experiments/MDL-1898/sample1/dragen_output",
+        "/experiments/MDL-1898/sample2/dragen_output"
+    ],
+    "crispr_h5ads": [
+        "/experiments/MDL-1898/sample1/adata/sample1.crispr.h5ad",
+        "/experiments/MDL-1898/sample2/adata/sample2.crispr.h5ad"
+    ],
+    "batch_id": "test_batch",
+    "batch_basename": "test_batch",
+    "qc_container": "079623148045.dkr.ecr.us-east-1.amazonaws.com/cp-prod/483688b7-bc90-442d-810c-7773140e9134:latest"
+}

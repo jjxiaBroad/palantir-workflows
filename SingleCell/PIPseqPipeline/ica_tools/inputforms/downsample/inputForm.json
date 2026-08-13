@@ -1,0 +1,201 @@
+{
+  "fields": [
+    {
+      "id": "section_datainputs",
+      "type": "section",
+      "label": "Section for selecting data inputs"
+    },
+    {
+      "type": "data",
+      "id": "samplesheet",
+      "helpText": "CSV describing the batch (columns: sample_id, dragen_results_dir, crispr_h5ad, +metadata)",
+      "label": "samplesheet",
+      "minValues": 1,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "dragen_results_dirs",
+      "helpText": "All DRAGEN results directories referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
+      "label": "dragen_results_dirs",
+      "minValues": 1,
+      "maxValues": 999,
+      "dataFilter": {
+        "dataType": "folder"
+      }
+    },
+    {
+      "type": "data",
+      "id": "crispr_h5ads",
+      "helpText": "All crispr_h5ad files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
+      "label": "crispr_h5ads",
+      "minValues": 1,
+      "maxValues": 999,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "textbox",
+      "id": "batch_id",
+      "minValues": 1,
+      "maxValues": 1
+    },
+    {
+      "type": "textbox",
+      "id": "batch_basename",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "batch_output"
+    },
+    {
+      "type": "textbox",
+      "id": "outdir",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "out"
+    },
+    {
+      "type": "textbox",
+      "id": "qc_container",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "079623148045.dkr.ecr.us-east-1.amazonaws.com/cp-prod/483688b7-bc90-442d-810c-7773140e9134:latest"
+    },
+    {
+      "type": "checkbox",
+      "id": "run_gex_downsample",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "checkbox",
+      "id": "run_crispr_downsample",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "checkbox",
+      "id": "run_combine",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "integer",
+      "id": "gex_target_depth",
+      "helpText": "Override the common GEX target reads/cell. Defaults to the minimum observed across the batch when not set.",
+      "minValues": 0,
+      "maxValues": 1,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "crispr_target_depth",
+      "helpText": "Override the common gRNA target reads/cell. Defaults to the minimum observed across the batch when not set.",
+      "minValues": 0,
+      "maxValues": 1,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "min_reads_per_cell",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 1,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "random_seed",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 42
+    },
+    {
+      "type": "integer",
+      "id": "cpu_summarize_gex_downsample_targets",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 2,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_summarize_gex_downsample_targets",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_summarize_grna_downsample_targets",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 2,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_summarize_grna_downsample_targets",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_downsample_molecule_info",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_downsample_molecule_info",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 32,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_downsample_crispr_anndata",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 2,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_downsample_crispr_anndata",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_combine_downsampled_batch",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_combine_downsampled_batch",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 32,
+      "min": 1
+    }
+  ]
+}

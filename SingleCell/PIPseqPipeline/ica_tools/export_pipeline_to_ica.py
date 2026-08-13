@@ -26,6 +26,11 @@ entrypoints = {
         'main_file_path': 'SingleCell/PIPseqPipeline/main_simple.nf',
         'input_form_dir': 'main_simple',
     },
+    'Batch downsample-and-combine entrypoint (downsample.nf, --samplesheet)': {
+        'name_suffix': '_Downsample',
+        'main_file_path': 'SingleCell/PIPseqPipeline/downsample.nf',
+        'input_form_dir': 'downsample',
+    },
 }
 
 entrypoint_names = list(entrypoints.keys())
@@ -43,7 +48,7 @@ pipeline_name = f'PIPseq_BCL{entrypoint["name_suffix"]}_{current_git_commit_id_s
 
 repository_url = 'https://github.com/broadinstitute/palantir-workflows'
 main_file_path = entrypoint['main_file_path']
-# Both entrypoints share the same process/resource config regardless of which is exported.
+# All entrypoints share the same process/resource config regardless of which is exported.
 nextflow_config_path = 'SingleCell/PIPseqPipeline/nextflow.config'
 
 git_credential_uuid = '5a2282d8-61a7-4222-8969-bfefbbe4f949'
