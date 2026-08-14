@@ -1,8 +1,8 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/broadinstitute/palantir-workflows/main/SingleCell/PIPseqDownsample/nextflow_schema.json",
-    "title": "PIPseq Pipeline - Batch downsample-and-combine workflow",
-    "description": "Downsamples a batch of already-processed samples' GEX molecule-info and gRNA AnnData to a common depth, and combines them into one AnnData for cross-sample comparison",
+    "$id": "https://raw.githubusercontent.com/broadinstitute/palantir-workflows/main/SingleCell/PIPseqDownsample/nextflow_schema_single_sample.json",
+    "title": "PIPseq Pipeline - Single-sample multiple-target-depths downsampling workflow",
+    "description": "Downsamples one already-processed sample's GEX molecule-info and gRNA AnnData to several target depths, optionally runs a GEX sequencing-saturation sweep, and combines the results across depths into one AnnData",
     "type": "object",
     "definitions": {
         "input_output_options": {
@@ -11,54 +11,27 @@
             "fa_icon": "fas fa-terminal",
             "description": "Define where the pipeline should find input data and save output data.",
             "required": [
-                "samplesheet",
-                "dragen_results_dirs",
-                "crispr_h5ads",
-                "batch_id",
-                "batch_basename"
+                "sample_id"
             ],
             "properties": {
-                "samplesheet": {
+                "sample_id": {
                     "type": "string",
-                    "format": "file-path",
-                    "mimetype": "text/csv",
-                    "description": "CSV describing the batch of samples",
-                    "help_text": "Columns: sample_id, dragen_results_dir, crispr_h5ad. dragen_results_dir is required per row when --run_gex_downsample is true; crispr_h5ad is required per row when --run_crispr_downsample is true. Any other column is treated as per-sample metadata and carried through into the downsample summary CSVs and the final combined AnnData's .obs.",
-                    "fa_icon": "fas fa-file-csv"
-                },
-                "dragen_results_dirs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "directory-path"
-                    },
-                    "minItems": 1,
-                    "description": "All DRAGEN results directories referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Not read directly by the pipeline -- --samplesheet's CSV already references these directories by path. Declaring them here as their own input is what makes ICA localize them onto the compute node before the run starts.",
-                    "fa_icon": "fas fa-folder"
-                },
-                "crispr_h5ads": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "file-path"
-                    },
-                    "minItems": 1,
-                    "description": "All crispr_h5ad files referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Same reasoning as --dragen_results_dirs, for the crispr_h5ad column.",
-                    "fa_icon": "fas fa-file"
-                },
-                "batch_id": {
-                    "type": "string",
-                    "description": "Batch identifier",
-                    "help_text": "Unique identifier for the batch of samples being processed.",
+                    "description": "Sample identifier",
                     "fa_icon": "fas fa-tag"
                 },
-                "batch_basename": {
+                "dragen_results_dir": {
                     "type": "string",
-                    "description": "Batch basename for output organization",
-                    "default": "batch_output",
+                    "format": "directory-path",
+                    "description": "DRAGEN scRNA results directory for the sample",
+                    "help_text": "Required when --run_gex_downsample is true.",
                     "fa_icon": "fas fa-folder"
+                },
+                "crispr_h5ad": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "CRISPR guide-capture AnnData (.h5ad) for the sample",
+                    "help_text": "Required when --run_crispr_downsample is true.",
+                    "fa_icon": "fas fa-file"
                 },
                 "outdir": {
                     "type": "string",
@@ -66,13 +39,21 @@
                     "description": "The output directory where the results will be saved",
                     "default": "out",
                     "fa_icon": "fas fa-folder-open"
+                },
+                "batch_basename": {
+                    "type": "string",
+                    "description": "Unused by this entrypoint",
+                    "help_text": "Only meaningful for downsample.nf's batch runs -- declared here purely because nextflow.config sets a config-parse-time default for it (used to key pipeline_info/ report paths before any entrypoint-specific param is available), and nf-schema warns about any params.* set outside the schema.",
+                    "default": "batch_output",
+                    "hidden": true,
+                    "fa_icon": "fas fa-folder"
                 }
             }
         },
         "downsample_options": {
             "title": "Downsample options",
             "type": "object",
-            "description": "Parameters controlling batch downsampling and combining",
+            "description": "Parameters controlling single-sample multi-depth downsampling and combining",
             "default": "",
             "fa_icon": "fas fa-compress-arrows-alt",
             "properties": {
@@ -90,29 +71,37 @@
                 },
                 "run_combine": {
                     "type": "boolean",
-                    "description": "Whether to combine downsampled GEX+gRNA into one AnnData",
+                    "description": "Whether to combine downsampled GEX+gRNA across depths into one AnnData",
                     "help_text": "Requires both --run_gex_downsample and --run_crispr_downsample to be true.",
                     "default": true,
                     "fa_icon": "fas fa-toggle-on"
                 },
-                "gex_target_depth": {
-                    "type": "integer",
-                    "description": "Override the common GEX target reads/cell",
-                    "help_text": "Defaults to the minimum 'Mean reads per cell' observed across the batch when not set.",
-                    "fa_icon": "fas fa-bullseye",
-                    "minimum": 1
+                "gex_target_depths": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "minItems": 1,
+                    "description": "One or more GEX target reads/cell depths",
+                    "help_text": "Required when --run_gex_downsample is true. One downsampled matrix is written per depth.",
+                    "fa_icon": "fas fa-bullseye"
                 },
-                "crispr_target_depth": {
-                    "type": "integer",
-                    "description": "Override the common gRNA target reads/cell",
-                    "help_text": "Defaults to the minimum gRNA mean reads/cell observed across the batch when not set.",
-                    "fa_icon": "fas fa-bullseye",
-                    "minimum": 1
+                "crispr_target_depths": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "minItems": 1,
+                    "description": "One or more gRNA target reads/cell depths",
+                    "help_text": "Required when --run_crispr_downsample is true. One downsampled AnnData is written per depth.",
+                    "fa_icon": "fas fa-bullseye"
                 },
                 "run_saturation": {
                     "type": "boolean",
-                    "description": "Also run a GEX sequencing-saturation sweep per sample",
-                    "help_text": "Requires --run_gex_downsample. Writes saturation.csv (median transcripts/genes and % sequencing saturation across a depth ladder) alongside each sample's downsampled GEX matrix.",
+                    "description": "Also run a GEX sequencing-saturation sweep",
+                    "help_text": "Requires --run_gex_downsample. Writes saturation.csv (median transcripts/genes and % sequencing saturation across a depth ladder) alongside the downsampled GEX matrices.",
                     "default": false,
                     "fa_icon": "fas fa-chart-line"
                 },
@@ -164,34 +153,6 @@
             "fa_icon": "fas fa-server",
             "description": "Resource allocation options for pipeline processes.",
             "properties": {
-                "cpu_summarize_gex_downsample_targets": {
-                    "type": "integer",
-                    "description": "Number of CPUs for the SUMMARIZE_GEX_DOWNSAMPLE_TARGETS process",
-                    "default": 2,
-                    "fa_icon": "fas fa-microchip",
-                    "minimum": 1
-                },
-                "memory_gb_summarize_gex_downsample_targets": {
-                    "type": "integer",
-                    "description": "Memory in GB for the SUMMARIZE_GEX_DOWNSAMPLE_TARGETS process",
-                    "default": 8,
-                    "fa_icon": "fas fa-memory",
-                    "minimum": 1
-                },
-                "cpu_summarize_grna_downsample_targets": {
-                    "type": "integer",
-                    "description": "Number of CPUs for the SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS process",
-                    "default": 2,
-                    "fa_icon": "fas fa-microchip",
-                    "minimum": 1
-                },
-                "memory_gb_summarize_grna_downsample_targets": {
-                    "type": "integer",
-                    "description": "Memory in GB for the SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS process",
-                    "default": 8,
-                    "fa_icon": "fas fa-memory",
-                    "minimum": 1
-                },
                 "cpu_downsample_molecule_info": {
                     "type": "integer",
                     "description": "Number of CPUs for the DOWNSAMPLE_MOLECULE_INFO process",
@@ -220,31 +181,63 @@
                     "fa_icon": "fas fa-memory",
                     "minimum": 1
                 },
-                "cpu_combine_downsampled_batch": {
-                    "type": "integer",
-                    "description": "Number of CPUs for the COMBINE_DOWNSAMPLED_BATCH process",
-                    "default": 8,
-                    "fa_icon": "fas fa-microchip",
-                    "minimum": 1
-                },
-                "memory_gb_combine_downsampled_batch": {
-                    "type": "integer",
-                    "description": "Memory in GB for the COMBINE_DOWNSAMPLED_BATCH process",
-                    "default": 32,
-                    "fa_icon": "fas fa-memory",
-                    "minimum": 1
-                },
                 "cpu_combine_downsampled_depths": {
                     "type": "integer",
-                    "description": "Unused by this entrypoint (only relevant to downsample_single_sample.nf's runs)",
+                    "description": "Number of CPUs for the COMBINE_DOWNSAMPLED_DEPTHS process",
                     "default": 8,
-                    "hidden": true,
                     "fa_icon": "fas fa-microchip",
                     "minimum": 1
                 },
                 "memory_gb_combine_downsampled_depths": {
                     "type": "integer",
-                    "description": "Unused by this entrypoint (only relevant to downsample_single_sample.nf's runs)",
+                    "description": "Memory in GB for the COMBINE_DOWNSAMPLED_DEPTHS process",
+                    "default": 32,
+                    "fa_icon": "fas fa-memory",
+                    "minimum": 1
+                },
+                "cpu_summarize_gex_downsample_targets": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
+                    "default": 2,
+                    "hidden": true,
+                    "fa_icon": "fas fa-microchip",
+                    "minimum": 1
+                },
+                "memory_gb_summarize_gex_downsample_targets": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
+                    "default": 8,
+                    "hidden": true,
+                    "fa_icon": "fas fa-memory",
+                    "minimum": 1
+                },
+                "cpu_summarize_grna_downsample_targets": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
+                    "default": 2,
+                    "hidden": true,
+                    "fa_icon": "fas fa-microchip",
+                    "minimum": 1
+                },
+                "memory_gb_summarize_grna_downsample_targets": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
+                    "default": 8,
+                    "hidden": true,
+                    "fa_icon": "fas fa-memory",
+                    "minimum": 1
+                },
+                "cpu_combine_downsampled_batch": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
+                    "default": 8,
+                    "hidden": true,
+                    "fa_icon": "fas fa-microchip",
+                    "minimum": 1
+                },
+                "memory_gb_combine_downsampled_batch": {
+                    "type": "integer",
+                    "description": "Unused by this entrypoint (only relevant to downsample.nf's batch runs)",
                     "default": 32,
                     "hidden": true,
                     "fa_icon": "fas fa-memory",

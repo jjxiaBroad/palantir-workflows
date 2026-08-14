@@ -15,15 +15,35 @@ current_git_commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).de
 current_git_commit_id_short = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode().strip()
 current_git_commit_message = subprocess.check_output(['git', 'log', '-1', '--pretty=%B']).decode().strip().split('\n')[0].strip()
 
-input_form_path = os.path.join(script_dir, 'inputforms', 'inputForm.json')
+entrypoints = {
+    'Batch downsample-and-combine entrypoint (downsample.nf, --samplesheet)': {
+        'name_suffix': '',
+        'main_file_path': 'SingleCell/PIPseqDownsample/downsample.nf',
+        'input_form_dir': 'downsample',
+    },
+    'Single-sample multi-depth entrypoint (downsample_single_sample.nf)': {
+        'name_suffix': '_SingleSample',
+        'main_file_path': 'SingleCell/PIPseqDownsample/downsample_single_sample.nf',
+        'input_form_dir': 'single_sample',
+    },
+}
+
+entrypoint_names = list(entrypoints.keys())
+entrypoint_choice = prompt_choice('Which entrypoint do you want to export?', entrypoint_names)
+if entrypoint_choice is None:
+    exit(0)
+entrypoint = entrypoints[entrypoint_names[entrypoint_choice]]
+
+input_form_path = os.path.join(script_dir, 'inputforms', entrypoint['input_form_dir'], 'inputForm.json')
 if not os.path.isfile(input_form_path):
     print(f'ERROR: input form file not found at {input_form_path}')
     exit(1)
 
-pipeline_name = f'PIPseq_BCL_Downsample_{current_git_commit_id_short}'
+pipeline_name = f'PIPseq_BCL_Downsample{entrypoint["name_suffix"]}_{current_git_commit_id_short}'
 
 repository_url = 'https://github.com/broadinstitute/palantir-workflows'
-main_file_path = 'SingleCell/PIPseqDownsample/downsample.nf'
+main_file_path = entrypoint['main_file_path']
+# Both entrypoints share the same process/resource config.
 nextflow_config_path = 'SingleCell/PIPseqDownsample/nextflow.config'
 
 git_credential_uuid = '5a2282d8-61a7-4222-8969-bfefbbe4f949'

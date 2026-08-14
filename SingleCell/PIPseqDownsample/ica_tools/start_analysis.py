@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Interactively kicks off an ICA analysis run for the downsample pipeline already imported via
+Interactively kicks off an ICA analysis run for a downsample pipeline already imported via
 export_pipeline_to_ica.py.
 
-Prompts for which ICA project to run in, then which already-imported downsample pipeline to run
-(flagging whichever one's commit matches the current git HEAD), then submits test/test_inputs.json.
+Prompts for which ICA project to run in, which already-imported downsample pipeline to run
+(flagging whichever one's commit matches the current git HEAD), and which of the
+test/test_inputs_downsample.json / test/test_inputs_single_sample.json input files to submit.
 
 That JSON file's file/folder inputs are given as project-relative paths (matching how they appear
 in the ICA project's data tree) rather than ICA data IDs -- this script resolves each one to its
@@ -32,7 +33,10 @@ pipeline_root = os.path.dirname(script_dir)
 DATA_ID_PATTERN = re.compile(r'^(fil|fol)\.[0-9a-f]+$')
 PIPELINE_NAME_PREFIX = 'PIPseq_BCL_Downsample'
 
-TEST_INPUTS_PATH = os.path.join(pipeline_root, 'test', 'test_inputs.json')
+TEST_INPUT_FILES = {
+    'downsample.nf (test/test_inputs_downsample.json)': os.path.join(pipeline_root, 'test', 'test_inputs_downsample.json'),
+    'downsample_single_sample.nf (test/test_inputs_single_sample.json)': os.path.join(pipeline_root, 'test', 'test_inputs_single_sample.json'),
+}
 
 
 def get_current_commit_id():
@@ -165,7 +169,11 @@ def main():
     pipeline = pipelines[pipeline_choice]
     pipeline_id = pipeline['id']
 
-    with open(TEST_INPUTS_PATH) as f:
+    input_file_names = list(TEST_INPUT_FILES.keys())
+    input_file_choice = prompt_choice('Which input file do you want to use?', input_file_names)
+    if input_file_choice is None:
+        sys.exit(0)
+    with open(TEST_INPUT_FILES[input_file_names[input_file_choice]]) as f:
         inputs = json.load(f)
 
     print('')

@@ -1,0 +1,9 @@
+{
+    "sample_id": "sample1",
+    "dragen_results_dir": "stub_inputs/downsample_dragen_results/sample1",
+    "crispr_h5ad": "stub_inputs/crispr_sample1.stub.h5ad",
+    "gex_target_depths": [5000, 10000],
+    "crispr_target_depths": [500, 1000],
+    "run_saturation": true,
+    "qc_container": "qc_docker_image:latest"
+}

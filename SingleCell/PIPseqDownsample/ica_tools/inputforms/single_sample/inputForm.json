@@ -1,0 +1,167 @@
+{
+  "fields": [
+    {
+      "id": "section_datainputs",
+      "type": "section",
+      "label": "Section for selecting data inputs"
+    },
+    {
+      "type": "textbox",
+      "id": "sample_id",
+      "minValues": 1,
+      "maxValues": 1
+    },
+    {
+      "type": "data",
+      "id": "dragen_results_dir",
+      "helpText": "DRAGEN scRNA results directory for the sample. Required when run_gex_downsample is true.",
+      "label": "dragen_results_dir",
+      "minValues": 0,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "folder"
+      }
+    },
+    {
+      "type": "data",
+      "id": "crispr_h5ad",
+      "helpText": "CRISPR guide-capture AnnData (.h5ad) for the sample. Required when run_crispr_downsample is true.",
+      "label": "crispr_h5ad",
+      "minValues": 0,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "textbox",
+      "id": "outdir",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "out"
+    },
+    {
+      "type": "textbox",
+      "id": "qc_container",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "079623148045.dkr.ecr.us-east-1.amazonaws.com/cp-prod/483688b7-bc90-442d-810c-7773140e9134:latest"
+    },
+    {
+      "type": "checkbox",
+      "id": "run_gex_downsample",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "checkbox",
+      "id": "run_crispr_downsample",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "checkbox",
+      "id": "run_combine",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": true
+    },
+    {
+      "type": "integer",
+      "id": "gex_target_depths",
+      "helpText": "One or more GEX target reads/cell depths. Required when run_gex_downsample is true.",
+      "minValues": 0,
+      "maxValues": 999,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "crispr_target_depths",
+      "helpText": "One or more gRNA target reads/cell depths. Required when run_crispr_downsample is true.",
+      "minValues": 0,
+      "maxValues": 999,
+      "min": 1
+    },
+    {
+      "type": "checkbox",
+      "id": "run_saturation",
+      "helpText": "Also run a GEX sequencing-saturation sweep. Requires run_gex_downsample.",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": false
+    },
+    {
+      "type": "integer",
+      "id": "saturation_extra_depths",
+      "helpText": "Extra reads-per-cell depths to include in the saturation sweep, beyond the built-in ladder. Ignored unless run_saturation is set.",
+      "minValues": 0,
+      "maxValues": 999,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "min_reads_per_cell",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 1,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "random_seed",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 42
+    },
+    {
+      "type": "integer",
+      "id": "cpu_downsample_molecule_info",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_downsample_molecule_info",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 32,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_downsample_crispr_anndata",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 2,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_downsample_crispr_anndata",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "cpu_combine_downsampled_depths",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 8,
+      "min": 1
+    },
+    {
+      "type": "integer",
+      "id": "memory_gb_combine_downsampled_depths",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": 32,
+      "min": 1
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+#!/usr/bin/env nextflow
+nextflow.enable.dsl=2
+
+/*
+ * Single-sample, multiple-target-depths downsampling workflow.
+ *
+ * Separate entrypoint from downsample.nf -- rather than normalizing a batch of samples to
+ * one common depth, this takes exactly one already-processed sample and downsamples it to
+ * several caller-specified target depths (e.g. to build a within-sample depth-response /
+ * saturation-style comparison), optionally also running a GEX sequencing-saturation sweep.
+ * It:
+ *   1. Downsamples the sample's GEX molecule-info and/or gRNA AnnData to every requested depth.
+ *   2. Combines the downsampled GEX + gRNA data across depths into one AnnData annotated with
+ *      an integer `depth` column, for within-sample cross-depth analysis.
+ */
+
+include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
+include { DOWNSAMPLE_SAMPLES } from './workflows/downsample_core'
+include { COMBINE_DOWNSAMPLED_DEPTHS } from './modules/combine_downsampled_depths'
+
+// All `def` declarations must come before any top-level statement (including `params.x = ...`
+// assignments) in the same script -- the strict script parser rejects declarations that follow
+// a statement. Hence helpMessage()/writeOutputManifest() are defined here, ahead of the param
+// defaults and workflow blocks below.
+
+def helpMessage() {
+    log.info"""
+    Usage:
+      nextflow run downsample_single_sample.nf --sample_id <id> --dragen_results_dir <dir> \\
+          --crispr_h5ad <file> --gex_target_depths <ints> --crispr_target_depths <ints> \\
+          --qc_container <image> [options]
+
+    Required arguments:
+      --sample_id                Sample identifier
+      --dragen_results_dir       DRAGEN scRNA results directory for the sample (required if --run_gex_downsample)
+      --crispr_h5ad              CRISPR guide-capture AnnData (.h5ad) for the sample (required if --run_crispr_downsample)
+      --gex_target_depths        One or more GEX target reads/cell depths (required if --run_gex_downsample)
+      --crispr_target_depths     One or more gRNA target reads/cell depths (required if --run_crispr_downsample)
+      --qc_container             Container image for QC/downsample processing
+
+    Optional arguments:
+      --run_gex_downsample       Whether to downsample GEX molecule-info (default: true)
+      --run_crispr_downsample    Whether to downsample gRNA AnnData (default: true)
+      --run_combine               Whether to combine downsampled GEX+gRNA across depths into one
+                                  AnnData -- requires both --run_gex_downsample and
+                                  --run_crispr_downsample (default: true)
+      --run_saturation            Also run a GEX sequencing-saturation sweep (default: false;
+                                  requires --run_gex_downsample)
+      --saturation_extra_depths   Extra reads-per-cell depths for the saturation sweep, beyond
+                                  the script's built-in ladder
+      --min_reads_per_cell       Floor below which a requested depth is dropped (default: 1)
+      --random_seed              Seed for the downsampling draws (default: 42)
+      --outdir                   Output directory (default: out)
+      --help                     Show this help message
+
+    Behavior:
+      - Downsamples the sample's GEX molecule-info (filtered-matrix layout only) and/or gRNA
+        AnnData to every depth in --gex_target_depths / --crispr_target_depths, under
+        gex_downsample/ and crispr_downsample/
+      - If --run_saturation is set, also writes saturation.csv alongside the downsampled GEX
+        matrix (median transcripts/genes and % sequencing saturation across a depth ladder)
+      - Combines the downsampled GEX+gRNA across depths into one AnnData under combined/,
+        annotated with an integer depth column -- only if both branches ran
+    """.stripIndent()
+}
+
+def writeOutputManifest() {
+    def manifest = file("${params.outdir}/${params.sample_id}/README.txt")
+    manifest.text = """
+        Output layout for sample '${params.sample_id}':
+
+          gex_downsample/     Downsampled GEX filtered matrix, one <depth>rpc/ subdir per
+                               requested depth, plus saturation.csv if --run_saturation true
+                               (only if --run_gex_downsample true)
+          crispr_downsample/  Downsampled gRNA AnnData, one <depth>rpc.h5ad file per requested
+                               depth (only if --run_crispr_downsample true)
+          combined/            Combined AnnData across depths (<sample_id>.depths_combined.h5ad),
+                               annotated with an integer depth column (only if --run_combine true)
+          pipeline_info/       Nextflow execution reports (timeline, report, trace, DAG)
+
+        See README.md in the pipeline repository for parameter and output details.
+        """.stripIndent()
+}
+
+// Define parameters
+params.sample_id = null                // Sample identifier
+params.dragen_results_dir = null       // DRAGEN scRNA results directory for the sample
+params.crispr_h5ad = null              // CRISPR guide-capture AnnData for the sample
+params.outdir = "out"                  // Output directory
+params.help = false
+params.qc_container = null             // QC container image
+params.run_gex_downsample = true       // Whether to downsample GEX molecule-info
+params.run_crispr_downsample = true    // Whether to downsample gRNA AnnData
+params.run_combine = true              // Whether to combine downsampled GEX+gRNA across depths
+params.gex_target_depths = []          // GEX target reads/cell depths
+params.crispr_target_depths = []       // gRNA target reads/cell depths
+params.run_saturation = false          // Also run a GEX sequencing-saturation sweep
+params.saturation_extra_depths = []    // Extra reads-per-cell depths for the saturation sweep
+params.min_reads_per_cell = 1          // Floor below which a requested depth is dropped
+params.random_seed = 42                // Seed for the downsampling draws
+
+workflow {
+    if (params.help) {
+        helpMessage()
+        exit 0
+    }
+
+    // Validate required/typed params against nextflow_schema_single_sample.json. Don't add
+    // hand-rolled `if (!params.x) exit 1` checks here for anything the schema already declares.
+    validateParameters(parameters_schema: 'nextflow_schema_single_sample.json')
+    log.info paramsSummaryLog(workflow)
+
+    // --- Business-logic checks that can't be expressed in JSON Schema ---
+    if (params.run_gex_downsample && !params.dragen_results_dir) {
+        log.error "ERROR: --run_gex_downsample is true, but --dragen_results_dir was not given."
+        exit 1
+    }
+    if (params.run_gex_downsample && !params.gex_target_depths) {
+        log.error "ERROR: --run_gex_downsample is true, but --gex_target_depths was not given."
+        exit 1
+    }
+    if (params.run_crispr_downsample && !params.crispr_h5ad) {
+        log.error "ERROR: --run_crispr_downsample is true, but --crispr_h5ad was not given."
+        exit 1
+    }
+    if (params.run_crispr_downsample && !params.crispr_target_depths) {
+        log.error "ERROR: --run_crispr_downsample is true, but --crispr_target_depths was not given."
+        exit 1
+    }
+    if (params.run_combine && !(params.run_gex_downsample && params.run_crispr_downsample)) {
+        log.error "ERROR: --run_combine requires both --run_gex_downsample and --run_crispr_downsample to be true."
+        exit 1
+    }
+    if (params.run_saturation && !params.run_gex_downsample) {
+        log.error "ERROR: --run_saturation requires --run_gex_downsample to be true."
+        exit 1
+    }
+
+    gex_input_ch = Channel.empty()
+    gex_target_depths_ch = Channel.value([depths: []])
+    if (params.run_gex_downsample) {
+        gex_input_ch = Channel.of(tuple(params.sample_id, file(params.dragen_results_dir)))
+        gex_target_depths_ch = Channel.value([depths: params.gex_target_depths])
+    }
+
+    crispr_input_ch = Channel.empty()
+    crispr_target_depths_ch = Channel.value([depths: []])
+    if (params.run_crispr_downsample) {
+        crispr_input_ch = Channel.of(tuple(params.sample_id, file(params.crispr_h5ad)))
+        crispr_target_depths_ch = Channel.value([depths: params.crispr_target_depths])
+    }
+
+    log.info "Downsampling GEX molecule-info and/or gRNA AnnData for ${params.sample_id}..."
+
+    DOWNSAMPLE_SAMPLES(
+        gex_input_ch,
+        crispr_input_ch,
+        null,  // run_basename: no separate outer grouping folder for a single-sample run
+        gex_target_depths_ch,
+        crispr_target_depths_ch
+    )
+
+    if (params.run_combine) {
+        log.info "Combining downsampled GEX+gRNA across depths for ${params.sample_id}..."
+
+        combine_input = DOWNSAMPLE_SAMPLES.out.matrices
+            .join(DOWNSAMPLE_SAMPLES.out.h5ads)
+
+        COMBINE_DOWNSAMPLED_DEPTHS(combine_input)
+    }
+}
+
+workflow.onComplete {
+    if (workflow.success) writeOutputManifest()
+}

@@ -18,8 +18,7 @@ nextflow.enable.dsl=2
 include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
 include { SUMMARIZE_GEX_DOWNSAMPLE_TARGETS } from './modules/summarize_gex_downsample_targets'
 include { SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS } from './modules/summarize_grna_downsample_targets'
-include { DOWNSAMPLE_MOLECULE_INFO } from './modules/downsample_molecule_info'
-include { DOWNSAMPLE_CRISPR_ANNDATA } from './modules/downsample_crispr_anndata'
+include { DOWNSAMPLE_SAMPLES } from './workflows/downsample_core'
 include { COMBINE_DOWNSAMPLED_BATCH } from './modules/combine_downsampled_batch'
 
 // All `def` declarations must come before any top-level statement (including `params.x = ...`
@@ -55,6 +54,8 @@ def helpMessage() {
                                   --run_gex_downsample and --run_crispr_downsample (default: true)
       --gex_target_depth         Override the common GEX target reads/cell (default: minimum observed across the batch)
       --crispr_target_depth      Override the common gRNA target reads/cell (default: minimum observed across the batch)
+      --run_saturation           Also run a GEX sequencing-saturation sweep per sample (default: false; requires --run_gex_downsample)
+      --saturation_extra_depths  Extra reads-per-cell depths to include in the saturation sweep, beyond the script's built-in ladder
       --min_reads_per_cell       Floor below which a requested depth is dropped (default: 1)
       --random_seed              Seed for the downsampling draws (default: 42)
       --outdir                   Output directory (default: out)
@@ -65,6 +66,8 @@ def helpMessage() {
         publishing a summary CSV for each under gex_downsample_summary/ and grna_downsample_summary/
       - Downsamples every sample's GEX molecule-info (filtered-matrix layout only) and/or gRNA AnnData
         to those targets, under <sample_id>/gex_downsample/ and <sample_id>/crispr_downsample/
+      - If --run_saturation is set, also writes a saturation.csv per sample alongside its downsampled
+        GEX matrix (median transcripts/genes and % sequencing saturation across a depth ladder)
       - Combines every sample's downsampled GEX+gRNA into one AnnData under combined/, annotated with
         the samplesheet's per-sample metadata columns -- only if both branches ran
     """.stripIndent()
@@ -79,7 +82,8 @@ def writeOutputManifest() {
                                            depth (only if --run_gex_downsample true)
           grna_downsample_summary/        Batch-wide gRNA metrics summary + resolved common target
                                            depth (only if --run_crispr_downsample true)
-          <sample_id>/gex_downsample/     That sample's downsampled GEX filtered matrix (only if
+          <sample_id>/gex_downsample/     That sample's downsampled GEX filtered matrix, plus
+                                           saturation.csv if --run_saturation true (only if
                                            --run_gex_downsample true)
           <sample_id>/crispr_downsample/  That sample's downsampled gRNA AnnData (only if
                                            --run_crispr_downsample true)
@@ -109,6 +113,8 @@ params.run_crispr_downsample = true    // Whether to downsample gRNA AnnData
 params.run_combine = true              // Whether to combine downsampled GEX+gRNA into one AnnData
 params.gex_target_depth = null         // Optional override for the common GEX target (reads/cell)
 params.crispr_target_depth = null      // Optional override for the common gRNA target (reads/cell)
+params.run_saturation = false          // Also run a GEX sequencing-saturation sweep per sample
+params.saturation_extra_depths = []    // Extra reads-per-cell depths for the saturation sweep
 params.min_reads_per_cell = 1          // Floor below which a requested depth is dropped
 params.random_seed = 42                // Seed for the downsampling draws
 
@@ -158,9 +164,15 @@ workflow {
                 log.error "ERROR: --run_combine requires both --run_gex_downsample and --run_crispr_downsample to be true."
                 exit 1
             }
+            if (params.run_saturation && !params.run_gex_downsample) {
+                log.error "ERROR: --run_saturation requires --run_gex_downsample to be true."
+                exit 1
+            }
             rows
         }
 
+    gex_target_depths_ch = Channel.value([depths: []])
+    gex_input_ch = Channel.empty()
     if (params.run_gex_downsample) {
         log.info "Summarizing GEX downsample targets across the batch..."
 
@@ -171,21 +183,14 @@ workflow {
 
         SUMMARIZE_GEX_DOWNSAMPLE_TARGETS(gex_summary_input)
 
-        gex_target_depth_ch = SUMMARIZE_GEX_DOWNSAMPLE_TARGETS.out.target_depth
-            .map { it.text.trim() as Integer }
+        gex_target_depths_ch = SUMMARIZE_GEX_DOWNSAMPLE_TARGETS.out.target_depth
+            .map { [depths: [it.text.trim() as Integer]] }
 
-        log.info "Downsampling GEX molecule-info for each sample..."
-
-        downsample_gex_input = sample_info
-            .map { s -> tuple(s.sample_id, file(s.dragen_results_dir)) }
-            .combine(gex_target_depth_ch)
-            .map { sample_id, dragen_results_dir, target_depth ->
-                tuple([sample_id: sample_id, target_depth: target_depth], dragen_results_dir)
-            }
-
-        DOWNSAMPLE_MOLECULE_INFO(downsample_gex_input)
+        gex_input_ch = sample_info.map { s -> tuple(s.sample_id, file(s.dragen_results_dir)) }
     }
 
+    crispr_target_depths_ch = Channel.value([depths: []])
+    crispr_input_ch = Channel.empty()
     if (params.run_crispr_downsample) {
         log.info "Summarizing gRNA downsample targets across the batch..."
 
@@ -196,26 +201,27 @@ workflow {
 
         SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS(grna_summary_input)
 
-        crispr_target_depth_ch = SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS.out.target_depth
-            .map { it.text.trim() as Integer }
+        crispr_target_depths_ch = SUMMARIZE_GRNA_DOWNSAMPLE_TARGETS.out.target_depth
+            .map { [depths: [it.text.trim() as Integer]] }
 
-        log.info "Downsampling gRNA AnnData for each sample..."
-
-        downsample_crispr_input = sample_info
-            .map { s -> tuple(s.sample_id, file(s.crispr_h5ad)) }
-            .combine(crispr_target_depth_ch)
-            .map { sample_id, crispr_h5ad, target_depth ->
-                tuple([sample_id: sample_id, target_depth: target_depth], crispr_h5ad)
-            }
-
-        DOWNSAMPLE_CRISPR_ANNDATA(downsample_crispr_input)
+        crispr_input_ch = sample_info.map { s -> tuple(s.sample_id, file(s.crispr_h5ad)) }
     }
+
+    log.info "Downsampling GEX molecule-info and/or gRNA AnnData for each sample..."
+
+    DOWNSAMPLE_SAMPLES(
+        gex_input_ch,
+        crispr_input_ch,
+        params.batch_basename,
+        gex_target_depths_ch,
+        crispr_target_depths_ch
+    )
 
     if (params.run_combine) {
         log.info "Combining downsampled GEX+gRNA for the batch..."
 
-        combine_input = DOWNSAMPLE_MOLECULE_INFO.out.matrices
-            .join(DOWNSAMPLE_CRISPR_ANNDATA.out.h5ads)
+        combine_input = DOWNSAMPLE_SAMPLES.out.matrices
+            .join(DOWNSAMPLE_SAMPLES.out.h5ads)
             .toList()
             .map { rows ->
                 tuple(

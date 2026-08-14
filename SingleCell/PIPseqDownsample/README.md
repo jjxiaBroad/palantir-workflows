@@ -1,46 +1,70 @@
-# PIPseq Batch Downsample-and-Combine Pipeline
+# PIPseq Downsampling Pipelines
 
-A Nextflow DSL2 pipeline for normalizing a *batch* of already-processed PIPseq single-cell RNA-seq samples to a common sequencing depth per cell, then combining them into one AnnData for cross-sample comparison.
+Nextflow DSL2 pipelines for downsampling already-processed PIPseq single-cell RNA-seq samples for cross-sample or cross-depth comparison.
 
-It operates on already-published DRAGEN scRNA output + gRNA AnnData (from `../PIPseqPipeline`, or any other pipeline producing the same shapes) — it never runs DRAGEN itself, so it's cheap to rerun repeatedly at different depths. There is a single entrypoint, `downsample.nf`, validated against `nextflow_schema.json`.
+Both entrypoints operate on already-published DRAGEN scRNA output + gRNA AnnData (from `../PIPseqPipeline`, or any other pipeline producing the same shapes) — neither runs DRAGEN itself, so both are cheap to rerun repeatedly at different depths.
 
-The pipeline is designed to run on Illumina Connected Analytics (ICA) but is plain Nextflow DSL2 and can run anywhere a compatible executor and the required container image are available.
+There are two entrypoints, sharing a common per-sample downsampling engine (`workflows/downsample_core.nf`):
+- **`downsample.nf`** — normalizes a *batch* of samples to one common sequencing depth per modality, then combines them into one AnnData for cross-sample comparison. Validated against `nextflow_schema.json`.
+- **`downsample_single_sample.nf`** — downsamples *one* sample to several caller-specified target depths (e.g. to build a within-sample depth-response comparison), then combines the results across depths into one AnnData. Also supports an optional GEX sequencing-saturation sweep. Validated against `nextflow_schema_single_sample.json`.
+
+The pipelines are designed to run on Illumina Connected Analytics (ICA) but are plain Nextflow DSL2 and can run anywhere a compatible executor and the required container image are available.
 
 ## Overview
 
-Given a `--samplesheet` (columns: `sample_id, dragen_results_dir, crispr_h5ad`, plus any per-sample metadata columns) describing a batch of samples, `downsample.nf`:
+### Batch downsample-and-combine (`downsample.nf`)
+
+Given a `--samplesheet` (columns: `sample_id, dragen_results_dir, crispr_h5ad`, plus any per-sample metadata columns) describing a batch of samples:
 
 1. Resolves one common GEX target depth and one common gRNA target depth for the whole batch — each independently defaults to the minimum "mean reads per cell" observed across the batch (you can only downsample down, never up), or an explicit `--gex_target_depth`/`--crispr_target_depth` override. Published as `gex_downsample_summary.csv`/`grna_downsample_summary.csv` (useful on their own, as a batch depth-landscape report).
-2. Downsamples every sample's GEX molecule-info (filtered-matrix layout, via `bin/downsample_molecule_info.py`'s IMI-based downsampler) and/or gRNA AnnData (via `bin/downsample_crispr_anndata.py`'s binomial-thinning downsampler) to those targets.
+2. Downsamples every sample's GEX molecule-info (filtered-matrix layout, via `bin/downsample_molecule_info.py`'s IMI-based downsampler) and/or gRNA AnnData (via `bin/downsample_crispr_anndata.py`'s binomial-thinning downsampler) to those targets. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep per sample (see below).
 3. Combines every sample's downsampled GEX + gRNA data into one AnnData (`bin/combine_downsampled_batch.py`) — only if both branches ran (`--run_combine`, default `true`). Barcodes between a sample's filtered GEX and gRNA are expected to already match; a mismatch is reported as a warning (only the shared barcodes are kept) rather than failing the run.
+
+### Single-sample multi-depth (`downsample_single_sample.nf`)
+
+Given one sample's `--dragen_results_dir` and/or `--crispr_h5ad`, plus one or more `--gex_target_depths`/`--crispr_target_depths`:
+
+1. Downsamples the sample's GEX molecule-info and/or gRNA AnnData to *every* requested depth (one downsampled matrix/AnnData per depth), via the same two scripts `downsample.nf` uses. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep (see below).
+2. Combines the downsampled GEX + gRNA data *across depths* into one AnnData (`bin/combine_downsampled_depths.py`), annotated with an integer `depth` column — only if both branches ran (`--run_combine`, default `true`).
+
+### GEX sequencing-saturation sweep (`--run_saturation`, both entrypoints)
+
+`bin/downsample_molecule_info.py` can optionally also run a sweep over a built-in reads-per-cell ladder (plus any `--saturation_extra_depths`), writing `saturation.csv` (median transcripts/genes per cell and % sequencing saturation at each depth) alongside the sample's downsampled matrices, without materializing full matrices at every ladder depth. This is GEX-only — gRNA/CRISPR Guide Capture reads have no meaningful molecule deduplication (see `bin/downsample_crispr_anndata.py`'s docstring), so "sequencing saturation" isn't a meaningful concept for that modality. `--run_saturation` requires `--run_gex_downsample`.
 
 ## Pipeline Structure
 
 ```
 SingleCell/PIPseqDownsample/
-├── downsample.nf                    # The single entrypoint (--samplesheet)
-├── nextflow.config                  # Pipeline configuration (default params, resources, reports)
-├── nextflow_schema.json             # Parameter schema (drives the ICA-rendered input form)
+├── downsample.nf                     # Batch downsample-and-combine entrypoint (--samplesheet)
+├── downsample_single_sample.nf       # Single-sample multi-depth entrypoint
+├── workflows/
+│   └── downsample_core.nf             # Shared per-sample downsampling engine called by both entrypoints
+├── nextflow.config                   # Pipeline configuration (default params, resources, reports)
+├── nextflow_schema.json              # Parameter schema for downsample.nf
+├── nextflow_schema_single_sample.json # Parameter schema for downsample_single_sample.nf
 ├── modules/
-│   ├── summarize_gex_downsample_targets.nf   # Resolve the batch's common GEX target depth
-│   ├── summarize_grna_downsample_targets.nf  # Resolve the batch's common gRNA target depth
-│   ├── downsample_molecule_info.nf   # Downsample one sample's GEX molecule-info
-│   ├── downsample_crispr_anndata.nf  # Downsample one sample's gRNA AnnData
-│   └── combine_downsampled_batch.nf  # Combine a batch's downsampled GEX+gRNA into one AnnData
+│   ├── summarize_gex_downsample_targets.nf   # Resolve the batch's common GEX target depth (downsample.nf only)
+│   ├── summarize_grna_downsample_targets.nf  # Resolve the batch's common gRNA target depth (downsample.nf only)
+│   ├── downsample_molecule_info.nf   # Downsample one sample's GEX molecule-info to one or more depths, +optional saturation sweep
+│   ├── downsample_crispr_anndata.nf  # Downsample one sample's gRNA AnnData to one or more depths
+│   ├── combine_downsampled_batch.nf  # Combine a batch's downsampled GEX+gRNA into one AnnData (downsample.nf only)
+│   └── combine_downsampled_depths.nf # Combine one sample's downsampled GEX+gRNA across depths into one AnnData (downsample_single_sample.nf only)
 ├── bin/
-│   ├── downsample_molecule_info.py   # GEX molecule-info downsampler (IMI-based)
+│   ├── downsample_molecule_info.py   # GEX molecule-info downsampler (IMI-based) + saturation sweep
 │   ├── downsample_crispr_anndata.py  # gRNA AnnData downsampler (binomial thinning)
 │   ├── summarize_gex_downsample_targets.py   # GEX batch-target summary/resolution script
 │   ├── summarize_grna_downsample_targets.py  # gRNA batch-target summary/resolution script
-│   └── combine_downsampled_batch.py  # GEX+gRNA batch-combine script
+│   ├── downsample_combine_common.py  # Shared GEX+gRNA merge helpers used by both combine scripts below
+│   ├── combine_downsampled_batch.py  # GEX+gRNA batch-combine script (across samples, one depth)
+│   └── combine_downsampled_depths.py # GEX+gRNA depth-combine script (across depths, one sample)
 ├── docker/                          # Dockerfile/build scripts for the qc_container image
 ├── stub_test/                       # Example inputs + `-stub-run` test setup
-├── test/                            # Flat pipeline-inputs JSON used by ica_tools/start_analysis.py
-├── ica_tools/                       # Scripts for publishing/running this pipeline on ICA
+├── test/                            # Flat pipeline-inputs JSON for each entrypoint, used by ica_tools/start_analysis.py
+├── ica_tools/                       # Scripts for publishing/running these pipelines on ICA
 │   ├── export_pipeline_to_ica.py     # Imports the current commit into ICA as a git-backed pipeline
 │   ├── start_analysis.py             # Interactively starts an ICA analysis run
 │   ├── ica_common.py                 # Shared helpers (API key, project list, prompt_choice())
-│   └── inputforms/inputForm.json     # Hand-maintained ICA launch-form definition
+│   └── inputforms/<downsample|single_sample>/inputForm.json  # Hand-maintained ICA launch-form definitions
 └── README.md                        # This file
 ```
 
@@ -56,14 +80,17 @@ There is no bundled Nextflow profile for local/container-less execution — ever
 
 ### Stub run (no container required)
 
-Every process has a `stub:` block that just touches placeholder output files, so you can validate the pipeline's wiring without running any real downsampling:
+Every process has a `stub:` block that just touches placeholder output files, so you can validate a pipeline's wiring without running any real downsampling:
 
 ```bash
 cd stub_test
 nextflow run ../downsample.nf -stub-run -params-file stub_inputs/pipeline_input.json
+
+# Single-sample multi-depth entrypoint
+nextflow run ../downsample_single_sample.nf -stub-run -params-file stub_inputs/pipeline_input_single_sample.json
 ```
 
-### Running the Pipeline
+### Running downsample.nf (batch)
 
 ```bash
 nextflow run downsample.nf \
@@ -76,9 +103,7 @@ nextflow run downsample.nf \
   --outdir results
 ```
 
-### samplesheet format
-
-CSV with columns `sample_id, dragen_results_dir, crispr_h5ad`, plus any other columns you want (they're carried through as per-sample metadata):
+**samplesheet format** — CSV with columns `sample_id, dragen_results_dir, crispr_h5ad`, plus any other columns you want (they're carried through as per-sample metadata):
 
 ```csv
 sample_id,dragen_results_dir,crispr_h5ad,condition
@@ -89,8 +114,6 @@ sample2,/path/to/sample2/dragen_output,/path/to/sample2/adata/sample2.crispr.h5a
 - `dragen_results_dir` is required per row when `--run_gex_downsample` is `true` (the default).
 - `crispr_h5ad` is required per row when `--run_crispr_downsample` is `true` (the default).
 - Every other column (e.g. `condition` above) ends up attached to `.obs` on the final combined AnnData.
-
-### Command-Line Options
 
 **Required:**
 - `--samplesheet`: CSV described above
@@ -103,32 +126,65 @@ sample2,/path/to/sample2/dragen_output,/path/to/sample2/adata/sample2.crispr.h5a
 **Optional:**
 - `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine`: toggle each stage (defaults: all `true`; `--run_combine` requires both downsample stages to be enabled)
 - `--gex_target_depth` / `--crispr_target_depth`: override the auto-computed common target
+- `--run_saturation` / `--saturation_extra_depths`: see [GEX sequencing-saturation sweep](#gex-sequencing-saturation-sweep---run_saturation-both-entrypoints) above (default: `false`; requires `--run_gex_downsample`)
 - `--min_reads_per_cell`: floor below which a requested depth is dropped (default: `1`)
 - `--random_seed`: seed for the downsampling draws (default: `42`)
-- Resource params for each of the 5 processes (`summarize_gex_downsample_targets`, `summarize_grna_downsample_targets`, `downsample_molecule_info`, `downsample_crispr_anndata`, `combine_downsampled_batch`) — see `nextflow_schema.json` for defaults
+- Resource params for each process — see `nextflow_schema.json` for defaults
 - `--outdir`: Output directory (default: `out`)
 - `--help`: Show help message
 
-## Parameter validation
-
-Required/typed params (presence, type, allowed range/pattern) are validated against `nextflow_schema.json` via the [`nf-schema`](https://nextflow-io.github.io/nf-schema/) plugin as soon as the pipeline starts — a missing, mistyped, or out-of-range param fails immediately with a clear message rather than partway through the run.
-
-A few checks that can't be expressed in JSON Schema are enforced separately, right after schema validation: every samplesheet row needs a non-empty `dragen_results_dir` when `--run_gex_downsample` is true (and likewise `crispr_h5ad` for `--run_crispr_downsample`), and `--run_combine` requires both downsample stages to be enabled.
-
-**Don't add hand-rolled `if (!params.x) { exit 1 }` checks for anything expressible in JSON Schema** — add/edit the corresponding property (and its `required` list) in `nextflow_schema.json` instead, so ICA's rendered form and the pipeline's own validation never drift apart.
-
-## Output
-
-Results are organized under `${params.outdir}/${params.batch_basename}/`:
-
+**Output**, under `${params.outdir}/${params.batch_basename}/`:
 - **`gex_downsample_summary/`**: batch-wide GEX metrics summary + resolved common target depth (only if `--run_gex_downsample true`)
 - **`grna_downsample_summary/`**: batch-wide gRNA metrics summary + resolved common target depth (only if `--run_crispr_downsample true`)
-- **`<sample_id>/gex_downsample/`**: that sample's downsampled GEX filtered matrix (only if `--run_gex_downsample true`)
+- **`<sample_id>/gex_downsample/`**: that sample's downsampled GEX filtered matrix, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
 - **`<sample_id>/crispr_downsample/`**: that sample's downsampled gRNA AnnData (only if `--run_crispr_downsample true`)
 - **`combined/<batch_basename>.combined.h5ad`**: the final combined, metadata-annotated AnnData (only if `--run_combine true`)
 - **`pipeline_info/`**: Nextflow reports (`timeline.html`, `report.html`, `trace.txt`, `dag.svg`)
 
 A `README.txt` describing this layout is written directly into `${params.outdir}/${params.batch_basename}/` when the run finishes successfully.
+
+### Running downsample_single_sample.nf
+
+```bash
+nextflow run downsample_single_sample.nf \
+  --sample_id "Sample_A" \
+  --dragen_results_dir sample_a/dragen_output \
+  --crispr_h5ad sample_a/adata/sample_a.crispr.h5ad \
+  --gex_target_depths 5000 10000 20000 \
+  --crispr_target_depths 500 1000 2000 \
+  --qc_container <qc image> \
+  --outdir results
+```
+
+**Required:**
+- `--sample_id`: Sample identifier
+- `--dragen_results_dir`: DRAGEN scRNA results directory for the sample (required when `--run_gex_downsample` is `true`)
+- `--crispr_h5ad`: CRISPR guide-capture AnnData for the sample (required when `--run_crispr_downsample` is `true`)
+- `--gex_target_depths`: one or more GEX target reads/cell depths (required when `--run_gex_downsample` is `true`)
+- `--crispr_target_depths`: one or more gRNA target reads/cell depths (required when `--run_crispr_downsample` is `true`)
+- `--qc_container`: Container image for QC/downsample processing
+
+**Optional:** same `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine` / `--run_saturation` / `--saturation_extra_depths` / `--min_reads_per_cell` / `--random_seed` / `--outdir` / `--help` params as `downsample.nf` — see `nextflow_schema_single_sample.json` for defaults.
+
+**Output**, under `${params.outdir}/${params.sample_id}/`:
+- **`gex_downsample/`**: one `<depth>rpc/` subdir per requested GEX depth, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
+- **`crispr_downsample/`**: one `<depth>rpc.h5ad` file per requested gRNA depth (only if `--run_crispr_downsample true`)
+- **`combined/<sample_id>.depths_combined.h5ad`**: the combined, depth-annotated AnnData (only if `--run_combine true`)
+- **`pipeline_info/`**: Nextflow reports, nested under `batch_basename`'s config-level default rather than `sample_id` — a cosmetic-only quirk (see the comment in `nextflow.config`); every actual data output above already publishes under `sample_id` correctly
+
+A `README.txt` describing this layout is written directly into `${params.outdir}/${params.sample_id}/` when the run finishes successfully.
+
+## Parameter validation
+
+Each entrypoint has its own schema (`downsample.nf` → `nextflow_schema.json`, `downsample_single_sample.nf` → `nextflow_schema_single_sample.json`). Required/typed params (presence, type, allowed range/pattern) are validated against the relevant schema via the [`nf-schema`](https://nextflow-io.github.io/nf-schema/) plugin as soon as the pipeline starts — a missing, mistyped, or out-of-range param fails immediately with a clear message rather than partway through the run.
+
+Both schemas declare the same full `resource_options`/`batch_basename` set (marking whichever half a given entrypoint doesn't use as `hidden`), even though each entrypoint's Nextflow processes only read the subset relevant to it — this keeps `nf-schema` from warning about the config-level defaults in the shared `nextflow.config` that the *other* entrypoint's schema doesn't declare.
+
+A few checks that can't be expressed in JSON Schema are enforced separately, right after schema validation:
+- `downsample.nf`: every samplesheet row needs a non-empty `dragen_results_dir` when `--run_gex_downsample` is true (and likewise `crispr_h5ad` for `--run_crispr_downsample`); `--run_combine` requires both downsample stages enabled; `--run_saturation` requires `--run_gex_downsample`.
+- `downsample_single_sample.nf`: `--dragen_results_dir`/`--gex_target_depths` must be given when `--run_gex_downsample` is true (and likewise `--crispr_h5ad`/`--crispr_target_depths` for `--run_crispr_downsample`); same `--run_combine`/`--run_saturation` cross-checks as above.
+
+**Don't add hand-rolled `if (!params.x) { exit 1 }` checks for anything expressible in JSON Schema** — add/edit the corresponding property (and its `required` list) in the relevant schema file instead, so ICA's rendered form and the pipeline's own validation never drift apart.
 
 ## Resuming Failed Runs
 
@@ -143,7 +199,7 @@ nextflow run downsample.nf ... -resume
 - **Solution**: The package needs to be added to `docker/qc/Dockerfile` (or `docker/qc/requirements.txt`) and the `qc_container` image rebuilt/pushed — pipeline processes run inside the container, not your local environment.
 
 **Error**: Pipeline exits immediately with a parameter validation error
-- **Solution**: Required/typed params are validated against `nextflow_schema.json` via the `nf-schema` plugin (see [Parameter validation](#parameter-validation)); a few additional business-logic checks (samplesheet content) run right after. Check the exact list of required flags above.
+- **Solution**: Required/typed params are validated against the entrypoint's schema via the `nf-schema` plugin (see [Parameter validation](#parameter-validation)); a few additional business-logic checks run right after. Check the exact list of required flags above.
 
 **Out of memory / timeout**: Adjust resource allocations in `nextflow.config` for specific processes, e.g.:
   ```groovy
@@ -157,11 +213,11 @@ nextflow run downsample.nf ... -resume
 
 ## ICA export
 
-All ICA-facing tooling lives in `ica_tools/`: `export_pipeline_to_ica.py`, `start_analysis.py`, `ica_common.py` (shared helpers), and `ica_tools/inputforms/inputForm.json` (a hand-maintained ICA launch-form definition).
+All ICA-facing tooling lives in `ica_tools/`: `export_pipeline_to_ica.py`, `start_analysis.py`, `ica_common.py` (shared helpers), and `ica_tools/inputforms/<downsample|single_sample>/inputForm.json` (hand-maintained ICA launch-form definitions, one per entrypoint).
 
-`ica_tools/export_pipeline_to_ica.py` imports the current git commit of this pipeline into an ICA project as a git-backed Nextflow pipeline (reads an API key from `~/.icav2/api_key.txt`, prompts interactively for which ICA project). Keep `ica_tools/inputforms/inputForm.json` in sync whenever a param is added/changed/removed in `nextflow_schema.json` — it's a separately hand-maintained file (ICA doesn't derive its launch form from the schema), so nothing enforces this at runtime the way `validateParameters()` does for the schema itself.
+`ica_tools/export_pipeline_to_ica.py` imports the current git commit into an ICA project as a git-backed Nextflow pipeline (reads an API key from `~/.icav2/api_key.txt`, prompts interactively for which ICA project **and which entrypoint** — `downsample.nf` or `downsample_single_sample.nf`, since they're registered as separate ICA pipelines sharing the same `nextflow.config`). Exported pipeline codes are `PIPseq_BCL_Downsample_<hash>` (batch) / `PIPseq_BCL_Downsample_SingleSample_<hash>` (single-sample). Keep the corresponding `ica_tools/inputforms/<entrypoint>/inputForm.json` in sync whenever a param is added/changed/removed in that entrypoint's schema — it's a separately hand-maintained file (ICA doesn't derive its launch form from the schema), so nothing enforces this at runtime the way `validateParameters()` does for the schema itself.
 
-`ica_tools/start_analysis.py` (no CLI args other than `--dry-run`) interactively starts an actual analysis run for a pipeline already imported into ICA: pick the ICA project, pick which already-imported downsample pipeline to run (listed via `GET /projects/{projectId}/pipelines`, filtered to pipelines whose `code` starts with `PIPseq_BCL_Downsample`, newest first, flagging whichever one's `gitPipelineImportDto.commitId` matches the current git HEAD), then submits `test/test_inputs.json`. `--dry-run` resolves inputs and prints the request payload without submitting.
+`ica_tools/start_analysis.py` (no CLI args other than `--dry-run`) interactively starts an actual analysis run for a pipeline already imported into ICA: pick the ICA project, pick which already-imported downsample pipeline to run (listed via `GET /projects/{projectId}/pipelines`, filtered to pipelines whose `code` starts with `PIPseq_BCL_Downsample`, newest first, flagging whichever one's `gitPipelineImportDto.commitId` matches the current git HEAD), then pick `test/test_inputs_downsample.json` or `test/test_inputs_single_sample.json` to submit. `--dry-run` resolves inputs and prints the request payload without submitting.
 
 ## Additional Resources
 

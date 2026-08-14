@@ -1,0 +1,8 @@
+{
+    "sample_id": "test_sample",
+    "dragen_results_dir": "/experiments/MDL-1898/sample1/dragen_output",
+    "crispr_h5ad": "/experiments/MDL-1898/sample1/adata/sample1.crispr.h5ad",
+    "gex_target_depths": [5000, 10000, 20000],
+    "crispr_target_depths": [500, 1000, 2000],
+    "qc_container": "079623148045.dkr.ecr.us-east-1.amazonaws.com/cp-prod/483688b7-bc90-442d-810c-7773140e9134:latest"
+}

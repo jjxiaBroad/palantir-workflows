@@ -103,6 +103,22 @@
       "min": 1
     },
     {
+      "type": "checkbox",
+      "id": "run_saturation",
+      "helpText": "Also run a GEX sequencing-saturation sweep per sample. Requires run_gex_downsample.",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": false
+    },
+    {
+      "type": "integer",
+      "id": "saturation_extra_depths",
+      "helpText": "Extra reads-per-cell depths to include in the saturation sweep, beyond the built-in ladder. Ignored unless run_saturation is set.",
+      "minValues": 0,
+      "maxValues": 999,
+      "min": 1
+    },
+    {
       "type": "integer",
       "id": "min_reads_per_cell",
       "minValues": 1,

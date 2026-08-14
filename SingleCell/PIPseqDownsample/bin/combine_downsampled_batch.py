@@ -28,16 +28,12 @@ Usage:
 """
 
 import argparse
-import glob
 import os
-import re
-import sys
 
 import anndata as ad
 import pandas as pd
-import scanpy as sc
 
-BARCODE_SUFFIX_RE = re.compile(r"-\d+$")
+from downsample_combine_common import find_one, load_gex_from_matrix_dir, load_downsampled_grna_from_h5ad, merge_gex_and_grna
 
 # Samplesheet columns that locate files rather than describe sample metadata.
 SAMPLESHEET_PATH_COLUMNS = {"sample_id", "dragen_results_dir", "crispr_h5ad"}
@@ -75,52 +71,14 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def find_one(pattern, what):
-    matches = sorted(glob.glob(pattern))
-    if len(matches) == 0:
-        raise FileNotFoundError(f"No {what} found for pattern: {pattern}")
-    if len(matches) > 1:
-        print(f"WARNING: multiple {what} matches for {pattern}; using first: {matches}", file=sys.stderr)
-    return matches[0]
-
-
-def load_gex(gex_matrix_dir):
-    matrix_dir = find_one(os.path.join(gex_matrix_dir, "*", "filtered_matrix"), "GEX filtered_matrix dir")
-    adata = sc.read_10x_mtx(matrix_dir, var_names="gene_symbols", cache=False)
-    adata.var_names_make_unique()
-    adata.var["feature_types"] = "Gene Expression"
-    return adata
-
-
-def load_downsampled_grna(crispr_h5ad_dir):
-    h5ad_path = find_one(os.path.join(crispr_h5ad_dir, "*.h5ad"), "downsampled gRNA .h5ad")
-    adata = ad.read_h5ad(h5ad_path)
-    adata.var_names_make_unique()
-    adata.var["feature_types"] = "CRISPR Guide Capture"
-    return adata
-
-
-def normalize_barcodes(adata):
-    adata.obs_names = adata.obs_names.str.replace(BARCODE_SUFFIX_RE, "", regex=True)
-    return adata
-
-
 def merge_sample(sample_id, gex_matrix_dir, crispr_h5ad_dir):
-    gex = normalize_barcodes(load_gex(gex_matrix_dir))
-    grna = normalize_barcodes(load_downsampled_grna(crispr_h5ad_dir))
+    gex_dir = find_one(os.path.join(gex_matrix_dir, "*", "filtered_matrix"), "GEX filtered_matrix dir")
+    h5ad_path = find_one(os.path.join(crispr_h5ad_dir, "*.h5ad"), "downsampled gRNA .h5ad")
+    gex = load_gex_from_matrix_dir(gex_dir)
+    grna = load_downsampled_grna_from_h5ad(h5ad_path)
 
-    shared = gex.obs_names.intersection(grna.obs_names)
-    if len(shared) != gex.n_obs or len(shared) != grna.n_obs:
-        print(
-            f"WARNING: sample '{sample_id}': GEX has {gex.n_obs} filtered cells, gRNA has "
-            f"{grna.n_obs} filtered cells, only {len(shared)} barcodes are shared -- "
-            "only shared barcodes will be kept for this sample.",
-            file=sys.stderr,
-        )
-
-    combined = ad.concat([gex, grna], axis=1, join="inner", merge="unique")
+    combined = merge_gex_and_grna(gex, grna, label=f"sample '{sample_id}'")
     combined.obs["sample_id"] = sample_id
-    print(f"{sample_id}: GEX {gex.shape} + downsampled gRNA {grna.shape} -> combined {combined.shape}")
     return combined
 
 
