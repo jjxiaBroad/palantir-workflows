@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Interactively kicks off an ICA analysis run for a PIPseq pipeline already imported via
+Interactively kicks off an ICA analysis run for the downsample pipeline already imported via
 export_pipeline_to_ica.py.
 
-Prompts for which ICA project to run in, which already-imported PIPseq pipeline to run
-(flagging whichever one's commit matches the current git HEAD), and which of the
-test/test_inputs_main.json / test/test_inputs_main_simple.json
-input files to submit.
+Prompts for which ICA project to run in, then which already-imported downsample pipeline to run
+(flagging whichever one's commit matches the current git HEAD), then submits test/test_inputs.json.
 
-File/folder inputs in those JSON files are given as project-relative paths (matching how
-they appear in the ICA project's data tree) rather than ICA data IDs -- this script resolves
-each one to its `fil.<hash>`/`fol.<hash>` ID by fetching the chosen pipeline's live input form
-from ICA (which is what already declares which fields are data fields) before submitting.
+That JSON file's file/folder inputs are given as project-relative paths (matching how they appear
+in the ICA project's data tree) rather than ICA data IDs -- this script resolves each one to its
+`fil.<hash>`/`fol.<hash>` ID by fetching the chosen pipeline's live input form from ICA (which is
+what already declares which fields are data fields) before submitting.
 
 Usage:
     python3 start_analysis.py [--dry-run]
@@ -32,12 +30,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 pipeline_root = os.path.dirname(script_dir)
 
 DATA_ID_PATTERN = re.compile(r'^(fil|fol)\.[0-9a-f]+$')
-PIPELINE_NAME_PREFIX = 'PIPseq_BCL'
+PIPELINE_NAME_PREFIX = 'PIPseq_BCL_Downsample'
 
-TEST_INPUT_FILES = {
-    'main.nf (test/test_inputs_main.json)': os.path.join(pipeline_root, 'test', 'test_inputs_main.json'),
-    'main_simple.nf (test/test_inputs_main_simple.json)': os.path.join(pipeline_root, 'test', 'test_inputs_main_simple.json'),
-}
+TEST_INPUTS_PATH = os.path.join(pipeline_root, 'test', 'test_inputs.json')
 
 
 def get_current_commit_id():
@@ -158,7 +153,7 @@ def main():
 
     pipelines = list_pipseq_pipelines(api_key, project_id)
     if not pipelines:
-        print(f'No PIPseq pipelines found in project "{project_names[project_choice]}" -- export one first with export_pipeline_to_ica.py.')
+        print(f'No downsample pipelines found in project "{project_names[project_choice]}" -- export one first with export_pipeline_to_ica.py.')
         sys.exit(1)
     pipeline_labels = [
         f"{p['code']} [{p['statusAsString']}]" + (' <- matches current HEAD commit' if p.get('gitPipelineImportDto', {}).get('commitId') == current_commit_id else '')
@@ -170,11 +165,7 @@ def main():
     pipeline = pipelines[pipeline_choice]
     pipeline_id = pipeline['id']
 
-    input_file_names = list(TEST_INPUT_FILES.keys())
-    input_file_choice = prompt_choice('Which input file do you want to use?', input_file_names)
-    if input_file_choice is None:
-        sys.exit(0)
-    with open(TEST_INPUT_FILES[input_file_names[input_file_choice]]) as f:
+    with open(TEST_INPUTS_PATH) as f:
         inputs = json.load(f)
 
     print('')
@@ -186,7 +177,7 @@ def main():
         print(f'ERROR: {e}')
         sys.exit(1)
 
-    user_reference = f"pipseq_test_run_{current_commit_id[:7]}"
+    user_reference = f"pipseq_downsample_test_run_{current_commit_id[:7]}"
 
     if args.dry_run:
         print('Dry run -- would submit the following analysis:')

@@ -1,7 +1,7 @@
 {
     "batch_id": "stub_batch",
     "batch_basename": "stub_batch",
-    "samplesheet": "stub_inputs/samplesheet_downsample.csv",
+    "samplesheet": "stub_inputs/samplesheet.csv",
     "dragen_results_dirs": [
         "stub_inputs/downsample_dragen_results/sample1",
         "stub_inputs/downsample_dragen_results/sample2"

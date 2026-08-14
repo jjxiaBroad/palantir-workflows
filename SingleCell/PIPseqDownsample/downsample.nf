@@ -100,7 +100,7 @@ params.crispr_h5ads = null             // Same idea as --dragen_results_dirs, fo
 // batch_id/batch_basename are intentionally not declared here (same convention as
 // main.nf's supersample_id/supersample_basename) -- batch_basename's default lives in
 // nextflow.config (needed early, for the timeline/report/trace/dag file paths), and
-// batch_id has no default since it's required by nextflow_schema_downsample.json.
+// batch_id has no default since it's required by nextflow_schema.json.
 params.outdir = "out"                  // Output directory
 params.help = false
 params.qc_container = null             // QC container image
@@ -118,9 +118,9 @@ workflow {
         exit 0
     }
 
-    // Validate required/typed params against nextflow_schema_downsample.json. Don't add
+    // Validate required/typed params against nextflow_schema.json. Don't add
     // hand-rolled `if (!params.x) exit 1` checks here for anything the schema already declares.
-    validateParameters(parameters_schema: 'nextflow_schema_downsample.json')
+    validateParameters(parameters_schema: 'nextflow_schema.json')
     log.info paramsSummaryLog(workflow)
 
     log.info "Reading samplesheet..."

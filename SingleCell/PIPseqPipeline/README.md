@@ -4,10 +4,9 @@ This is a pipeline for processing single-cell QC metrics from PIPseq data using 
 
 The pipeline is designed to run on Illumina Connected Analytics (ICA) — DRAGEN is scheduled onto ICA's FPGA-preset pods (see `pod annotation:` lines in `modules/dragen_scrna.nf`) — but it is plain Nextflow DSL2 and can run anywhere a compatible executor and the required container images are available.
 
-There are three entrypoints. `main.nf` and `main_simple.nf` share the same underlying engine (`workflows/pipseq_core.nf`); `downsample.nf` is fully independent (it operates on already-published DRAGEN output rather than running DRAGEN itself):
+There are two entrypoints, sharing the same underlying engine (`workflows/pipseq_core.nf`):
 - **`main.nf`** — production entrypoint. Describes potentially many subsamples via a `--fastq_list` CSV.
 - **`main_simple.nf`** — for one-off runs with a single subsample, where hand-writing a `--fastq_list` CSV is unnecessary friction. Takes flat expression/feature/hashing FASTQ lists instead; see [Simple single-subsample entrypoint](#simple-single-subsample-entrypoint).
-- **`downsample.nf`** — for normalizing a *batch* of already-processed samples to a common sequencing depth before cross-sample comparison, and combining them into one AnnData. See [Batch downsample-and-combine entrypoint](#batch-downsample-and-combine-entrypoint).
 
 ## Overview
 
@@ -32,36 +31,24 @@ There are three entrypoints. `main.nf` and `main_simple.nf` share the same under
 SingleCell/PIPseqPipeline/
 ├── main.nf                          # Production entrypoint (--fastq_list)
 ├── main_simple.nf                   # Simple single-subsample entrypoint (flat FASTQ params)
-├── downsample.nf                    # Batch downsample-and-combine entrypoint (--samplesheet)
 ├── workflows/
-│   └── pipseq_core.nf                # Shared engine called by main.nf/main_simple.nf
+│   └── pipseq_core.nf                # Shared engine called by both entrypoints
 ├── nextflow.config                  # Pipeline configuration (default params, resources, reports)
 ├── nextflow_schema.json             # Parameter schema for main.nf (drives the ICA-rendered input form)
 ├── nextflow_schema_simple.json      # Parameter schema for main_simple.nf
-├── nextflow_schema_downsample.json  # Parameter schema for downsample.nf
 ├── modules/
 │   ├── dragen_scrna.nf               # Run DRAGEN scRNA for one subsample
 │   ├── generate_subsample_qc.nf      # Generate per-subsample QC metrics
 │   ├── concatenate.nf                # Concatenate subsamples into a supersample AnnData
 │   ├── crispat_guide_assignment.nf   # CRISPAT guide assignment
 │   ├── purity_based_guide_assignment.nf  # Purity-based guide assignment
-│   ├── generate_supersample_qc.nf    # Generate supersample-level QC report
-│   ├── summarize_gex_downsample_targets.nf   # Resolve the batch's common GEX target depth
-│   ├── summarize_grna_downsample_targets.nf  # Resolve the batch's common gRNA target depth
-│   ├── downsample_molecule_info.nf   # Downsample one sample's GEX molecule-info
-│   ├── downsample_crispr_anndata.nf  # Downsample one sample's gRNA AnnData
-│   └── combine_downsampled_batch.nf  # Combine a batch's downsampled GEX+gRNA into one AnnData
+│   └── generate_supersample_qc.nf    # Generate supersample-level QC report
 ├── bin/
 │   ├── generate_subsample_qc.py      # Per-subsample QC metrics script
 │   ├── concatenate_samples.py        # Concatenation script
 │   ├── run_crispat_guide_assignment.py   # CRISPAT guide assignment script
 │   ├── purity_based_guide_assignment.py  # Purity-based guide assignment script
-│   ├── generate_supersample_qc.py    # Supersample QC report script
-│   ├── downsample_molecule_info.py   # GEX molecule-info downsampler (IMI-based)
-│   ├── downsample_crispr_anndata.py  # gRNA AnnData downsampler (binomial thinning)
-│   ├── summarize_gex_downsample_targets.py   # GEX batch-target summary/resolution script
-│   ├── summarize_grna_downsample_targets.py  # gRNA batch-target summary/resolution script
-│   └── combine_downsampled_batch.py  # GEX+gRNA batch-combine script
+│   └── generate_supersample_qc.py    # Supersample QC report script
 ├── docker/                          # Dockerfile/build scripts for the qc_container image
 ├── stub_test/                       # Example inputs + `-stub-run` test setup
 ├── test/                            # Flat pipeline-inputs JSON for each entrypoint, used by ica_tools/start_analysis.py
@@ -69,7 +56,7 @@ SingleCell/PIPseqPipeline/
 │   ├── export_pipeline_to_ica.py     # Imports the current commit into ICA as a git-backed pipeline
 │   ├── start_analysis.py             # Interactively starts an ICA analysis run
 │   ├── ica_common.py                 # Shared helpers (API key, project list, prompt_choice())
-│   └── inputforms/<main|main_simple|downsample>/inputForm.json  # Hand-maintained ICA launch-form definitions
+│   └── inputforms/<main|main_simple>/inputForm.json  # Hand-maintained ICA launch-form definitions
 └── README.md                        # This file
 ```
 
@@ -94,9 +81,6 @@ nextflow run ../main.nf -stub-run -params-file stub_inputs/pipeline_input.json
 
 # Simple entrypoint
 nextflow run ../main_simple.nf -stub-run -params-file stub_inputs/pipeline_input_simple.json
-
-# Batch downsample-and-combine entrypoint
-nextflow run ../downsample.nf -stub-run -params-file stub_inputs/pipeline_input_downsample.json
 ```
 
 See `stub_test/stub_inputs/` for additional variants (no feature library, cell hashing).
@@ -161,52 +145,6 @@ nextflow run main_simple.nf \
 - Internally, `main_simple.nf` synthesizes a DRAGEN-compatible fastq-list CSV from the given FASTQ lists and hands it to the same shared engine (`workflows/pipseq_core.nf`) `main.nf` uses — everything downstream of subsample discovery (DRAGEN, concatenation, guide assignment, QC) behaves identically either way.
 - Validated against `nextflow_schema_simple.json` (a separate schema from `main.nf`'s `nextflow_schema.json`, since the input params differ).
 
-### Batch downsample-and-combine entrypoint
-
-`downsample.nf` is a fully separate entrypoint (no shared Nextflow code with `main.nf`/`main_simple.nf`/`workflows/pipseq_core.nf`) for the common cross-sample-comparison workflow: normalize a batch of already-processed samples to a common sequencing depth per cell, then combine them into one AnnData for downstream analysis. It operates on already-published DRAGEN output + gRNA AnnData — it never runs DRAGEN itself, so it's cheap to rerun repeatedly at different depths.
-
-```bash
-nextflow run downsample.nf \
-  --samplesheet samplesheet.csv \
-  --dragen_results_dirs sample1/dragen_output,sample2/dragen_output \
-  --crispr_h5ads sample1/adata/sample1.crispr.h5ad,sample2/adata/sample2.crispr.h5ad \
-  --batch_id "Batch_A" \
-  --batch_basename "batch_a" \
-  --qc_container <qc image> \
-  --outdir results
-```
-
-**Samplesheet format** — CSV with columns `sample_id, dragen_results_dir, crispr_h5ad`, plus any other columns you want (they're carried through as per-sample metadata):
-
-```csv
-sample_id,dragen_results_dir,crispr_h5ad,condition
-sample1,/path/to/sample1/dragen_output,/path/to/sample1/adata/sample1.crispr.h5ad,treated
-sample2,/path/to/sample2/dragen_output,/path/to/sample2/adata/sample2.crispr.h5ad,control
-```
-
-- `dragen_results_dir` is required per row when `--run_gex_downsample` is `true` (the default).
-- `crispr_h5ad` is required per row when `--run_crispr_downsample` is `true` (the default).
-- Every other column (e.g. `condition` above) ends up attached to `.obs` on the final combined AnnData.
-
-**Behavior:**
-1. Resolves one common GEX target depth and one common gRNA target depth for the whole batch — each independently defaults to the minimum "mean reads per cell" observed across the batch (you can only downsample down, never up), or an explicit `--gex_target_depth`/`--crispr_target_depth` override. Published as `gex_downsample_summary.csv`/`grna_downsample_summary.csv` (useful on their own, as a batch depth-landscape report).
-2. Downsamples every sample's GEX molecule-info (filtered-matrix layout, via `bin/downsample_molecule_info.py`'s IMI-based downsampler) and/or gRNA AnnData (via `bin/downsample_crispr_anndata.py`'s binomial-thinning downsampler) to those targets.
-3. Combines every sample's downsampled GEX + gRNA data into one AnnData (`bin/combine_downsampled_batch.py`) — only if both branches ran (`--run_combine`, default `true`). Barcodes between a sample's filtered GEX and gRNA are expected to already match; a mismatch is reported as a warning (only the shared barcodes are kept) rather than failing the run.
-
-**Optional arguments:**
-- `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine`: toggle each stage (defaults: all `true`; `--run_combine` requires both downsample stages to be enabled)
-- `--gex_target_depth` / `--crispr_target_depth`: override the auto-computed common target
-- `--min_reads_per_cell`: floor below which a requested depth is dropped (default: `1`)
-- `--random_seed`: seed for the downsampling draws (default: `42`)
-- Resource params for each of the 5 processes (`summarize_gex_downsample_targets`, `summarize_grna_downsample_targets`, `downsample_molecule_info`, `downsample_crispr_anndata`, `combine_downsampled_batch`) — see `nextflow_schema_downsample.json` for defaults
-
-**Output**, under `${params.outdir}/${params.batch_basename}/`:
-- `gex_downsample_summary/`, `grna_downsample_summary/`: batch-wide metrics + resolved target depth
-- `<sample_id>/gex_downsample/`, `<sample_id>/crispr_downsample/`: that sample's downsampled data
-- `combined/<batch_basename>.combined.h5ad`: the final combined, metadata-annotated AnnData
-
-Validated against `nextflow_schema_downsample.json`.
-
 ### Parameter validation
 
 Required/typed params (presence, type, allowed range/pattern) are validated against `nextflow_schema.json` via the [`nf-schema`](https://nextflow-io.github.io/nf-schema/) plugin as soon as the pipeline starts — a missing, mistyped, or out-of-range param fails immediately with a clear message rather than partway through the run.
@@ -215,8 +153,6 @@ A few checks that can't be expressed in JSON Schema are enforced separately, rig
 - `RGTY` values in `--fastq_list` must be exactly `expression`, `feature`, or `hashing` (case-sensitive) — a typo fails immediately instead of silently producing an empty feature/hashing group.
 - If `--fastq_list` has any `feature` rows, `--scrna_feature_barcode_reference` must be set (and likewise `--scrna_cell_hashing_reference` for `hashing` rows).
 - `--min_valid_guides` must be `<= --max_valid_guides`.
-
-`downsample.nf` is validated against `nextflow_schema_downsample.json` the same way, with its own samplesheet-content checks: every row needs a non-empty `dragen_results_dir` when `--run_gex_downsample` is true (and likewise `crispr_h5ad` for `--run_crispr_downsample`), and `--run_combine` requires both downsample stages to be enabled.
 
 ### Command-Line Options
 

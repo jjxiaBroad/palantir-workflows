@@ -15,36 +15,16 @@ current_git_commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).de
 current_git_commit_id_short = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode().strip()
 current_git_commit_message = subprocess.check_output(['git', 'log', '-1', '--pretty=%B']).decode().strip().split('\n')[0].strip()
 
-entrypoints = {
-    'Full pipeline (main.nf, --fastq_list)': {
-        'name_suffix': '',
-        'main_file_path': 'SingleCell/PIPseqPipeline/main.nf',
-        'input_form_dir': 'main',
-    },
-    'Simple single-subsample entrypoint (main_simple.nf, flat FASTQ params)': {
-        'name_suffix': '_Simple',
-        'main_file_path': 'SingleCell/PIPseqPipeline/main_simple.nf',
-        'input_form_dir': 'main_simple',
-    },
-}
-
-entrypoint_names = list(entrypoints.keys())
-entrypoint_choice = prompt_choice('Which entrypoint do you want to export?', entrypoint_names)
-if entrypoint_choice is None:
-    exit(0)
-entrypoint = entrypoints[entrypoint_names[entrypoint_choice]]
-
-input_form_path = os.path.join(script_dir, 'inputforms', entrypoint['input_form_dir'], 'inputForm.json')
+input_form_path = os.path.join(script_dir, 'inputforms', 'inputForm.json')
 if not os.path.isfile(input_form_path):
     print(f'ERROR: input form file not found at {input_form_path}')
     exit(1)
 
-pipeline_name = f'PIPseq_BCL{entrypoint["name_suffix"]}_{current_git_commit_id_short}'
+pipeline_name = f'PIPseq_BCL_Downsample_{current_git_commit_id_short}'
 
 repository_url = 'https://github.com/broadinstitute/palantir-workflows'
-main_file_path = entrypoint['main_file_path']
-# All entrypoints share the same process/resource config regardless of which is exported.
-nextflow_config_path = 'SingleCell/PIPseqPipeline/nextflow.config'
+main_file_path = 'SingleCell/PIPseqDownsample/downsample.nf'
+nextflow_config_path = 'SingleCell/PIPseqDownsample/nextflow.config'
 
 git_credential_uuid = '5a2282d8-61a7-4222-8969-bfefbbe4f949'
 

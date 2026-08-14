@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/broadinstitute/palantir-workflows/main/SingleCell/PIPseqPipeline/nextflow_schema_downsample.json",
+    "$id": "https://raw.githubusercontent.com/broadinstitute/palantir-workflows/main/SingleCell/PIPseqDownsample/nextflow_schema.json",
     "title": "PIPseq Pipeline - Batch downsample-and-combine workflow",
     "description": "Downsamples a batch of already-processed samples' GEX molecule-info and gRNA AnnData to a common depth, and combines them into one AnnData for cross-sample comparison",
     "type": "object",

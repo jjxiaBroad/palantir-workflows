@@ -12,6 +12,8 @@ process DOWNSAMPLE_MOLECULE_INFO {
     tag "${meta.sample_id}"
     publishDir "${params.outdir}/${params.batch_basename}/${meta.sample_id}/gex_downsample", mode: 'copy'
     container "${params.qc_container}"
+    // cpus reserved here are also handed to the script's own --threads flag below, so
+    // the multiprocessing pool it spins up actually matches what's been reserved.
     cpus params.cpu_downsample_molecule_info
     memory "${params.memory_gb_downsample_molecule_info}.GB"
 
@@ -36,7 +38,8 @@ process DOWNSAMPLE_MOLECULE_INFO {
         --matrix-depths ${meta.target_depth} \\
         --matrix-format filtered \\
         --min-reads-per-cell ${params.min_reads_per_cell} \\
-        --random-seed ${params.random_seed}
+        --random-seed ${params.random_seed} \\
+        --threads ${task.cpus}
     """
 
     stub:

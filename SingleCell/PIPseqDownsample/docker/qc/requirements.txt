@@ -1,0 +1,3 @@
+# Additional pip packages for the downsample pipeline
+# pandas, numpy, scipy, h5py, anndata, scanpy are installed via conda (see Dockerfile).
+# Add any other pip-only packages here if needed
