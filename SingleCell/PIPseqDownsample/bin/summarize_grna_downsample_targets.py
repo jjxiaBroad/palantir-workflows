@@ -17,8 +17,9 @@ minimum mean reads/cell observed across the batch (or an explicit
 integer) is exactly what downsample_crispr_anndata.py --matrix-depths should
 be given for every sample in the batch.
 
-Every samplesheet column other than sample_id/dragen_results_dir/crispr_h5ad
-is carried through into the output summary verbatim.
+Every samplesheet column other than sample_id/molecule_info_h5/
+scrna_metrics_csv/filtered_barcodes_tsv/features_tsv/crispr_h5ad is carried
+through into the output summary verbatim.
 
 Usage:
     python summarize_grna_downsample_targets.py \\
@@ -37,7 +38,10 @@ import pandas as pd
 import anndata as ad
 
 # Samplesheet columns that locate files rather than describe sample metadata.
-SAMPLESHEET_PATH_COLUMNS = {"sample_id", "dragen_results_dir", "crispr_h5ad"}
+SAMPLESHEET_PATH_COLUMNS = {
+    "sample_id", "molecule_info_h5", "scrna_metrics_csv", "filtered_barcodes_tsv",
+    "features_tsv", "crispr_h5ad",
+}
 
 
 def parse_args(argv=None):

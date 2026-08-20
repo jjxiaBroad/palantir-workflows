@@ -3,13 +3,12 @@
 common GEX downsampling target needed to normalize sequencing depth per cell
 across the batch before cross-sample comparison.
 
-For each sample this reads its DRAGEN ``<prefix>.scRNA_metrics.csv`` (located
-via ``find_scrna_metrics_csv`` from ``downsample_molecule_info.py``, which
-lives alongside this script in ``bin/``) and pulls out a handful of QC
-metrics, keyed by the exact metric name DRAGEN writes in column 3 of that
-CSV -- see METRIC_FIELDS below. "Mean reads per cell (Total input reads /
-Passing cells)" is DRAGEN's own precomputed value, so no separate read-count/
-cell-count arithmetic is needed here.
+For each sample this reads its DRAGEN ``<prefix>.scRNA_metrics.csv`` (an
+explicit, required path per sample -- no filename-convention guessing) and
+pulls out a handful of QC metrics, keyed by the exact metric name DRAGEN
+writes in column 3 of that CSV -- see METRIC_FIELDS below. "Mean reads per
+cell (Total input reads / Passing cells)" is DRAGEN's own precomputed value,
+so no separate read-count/cell-count arithmetic is needed here.
 
 The common target -- ``target_mean_reads_per_cell`` -- defaults to the
 minimum "Mean reads per cell" observed across the batch (you can only
@@ -18,14 +17,15 @@ This value (rounded to the nearest integer) is what
 ``downsample_molecule_info.py --matrix-depths`` should be given for every
 sample in the batch.
 
-Every samplesheet column other than sample_id/dragen_results_dir/crispr_h5ad
-is carried through into the output summary verbatim, whatever a given batch's
+Every samplesheet column other than sample_id/molecule_info_h5/
+scrna_metrics_csv/filtered_barcodes_tsv/features_tsv/crispr_h5ad is carried
+through into the output summary verbatim, whatever a given batch's
 samplesheet happens to include.
 
 Usage:
     python summarize_gex_downsample_targets.py \\
-        --dragen-results-dirs dir1 dir2 dir3 \\
-        --sample-ids sample1,sample2,sample3 \\
+        --scrna-metrics-csvs sample1.scRNA_metrics.csv sample2.scRNA_metrics.csv \\
+        --sample-ids sample1,sample2 \\
         --samplesheet samplesheet.csv \\
         --output gex_downsample_summary.csv \\
         --target-depth-output gex_target_depth.txt
@@ -36,8 +36,6 @@ import csv
 import sys
 
 import pandas as pd
-
-from downsample_molecule_info import find_scrna_metrics_csv
 
 # Metrics pulled out of each scRNA_metrics.csv, keyed by the exact metric
 # name DRAGEN writes in column 3 of the CSV.
@@ -56,27 +54,30 @@ METRIC_FIELDS = {
 }
 
 # Samplesheet columns that locate files rather than describe sample metadata.
-SAMPLESHEET_PATH_COLUMNS = {"sample_id", "dragen_results_dir", "crispr_h5ad"}
+SAMPLESHEET_PATH_COLUMNS = {
+    "sample_id", "molecule_info_h5", "scrna_metrics_csv", "filtered_barcodes_tsv",
+    "features_tsv", "crispr_h5ad",
+}
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        "--dragen-results-dirs",
+        "--scrna-metrics-csvs",
         nargs="+",
         required=True,
-        help="DRAGEN results directories, one per sample, aligned with --sample-ids.",
+        help="DRAGEN scRNA_metrics.csv files, one per sample, aligned with --sample-ids.",
     )
     parser.add_argument(
         "--sample-ids",
         required=True,
-        help="Comma-separated sample IDs, aligned with --dragen-results-dirs.",
+        help="Comma-separated sample IDs, aligned with --scrna-metrics-csvs.",
     )
     parser.add_argument(
         "--samplesheet",
         required=True,
         help="Batch samplesheet CSV, used only to pull per-sample metadata columns "
-             "(sample_id, dragen_results_dir, crispr_h5ad are ignored here).",
+             "(path columns are ignored here).",
     )
     parser.add_argument(
         "--target-reads-per-cell",
@@ -133,21 +134,16 @@ def load_samplesheet_metadata(samplesheet_path):
     }
 
 
-def build_summary(dragen_results_dirs, sample_ids, samplesheet_path):
-    if len(dragen_results_dirs) != len(sample_ids):
+def build_summary(scrna_metrics_csvs, sample_ids, samplesheet_path):
+    if len(scrna_metrics_csvs) != len(sample_ids):
         raise ValueError(
-            f"Got {len(dragen_results_dirs)} --dragen-results-dirs but "
+            f"Got {len(scrna_metrics_csvs)} --scrna-metrics-csvs but "
             f"{len(sample_ids)} --sample-ids; these must be aligned 1:1."
         )
     metadata_by_sample = load_samplesheet_metadata(samplesheet_path)
 
     rows = []
-    for sample_id, results_dir in zip(sample_ids, dragen_results_dirs):
-        metrics_path = find_scrna_metrics_csv(results_dir)
-        if metrics_path is None:
-            raise FileNotFoundError(
-                f"No scRNA_metrics.csv found for sample '{sample_id}' under {results_dir}"
-            )
+    for sample_id, metrics_path in zip(sample_ids, scrna_metrics_csvs):
         metrics = parse_scrna_metrics(metrics_path)
 
         row = {"sample_id": sample_id}
@@ -189,7 +185,7 @@ def main(argv=None):
     args = parse_args(argv)
     sample_ids = [s.strip() for s in args.sample_ids.split(",") if s.strip()]
 
-    summary = build_summary(args.dragen_results_dirs, sample_ids, args.samplesheet)
+    summary = build_summary(args.scrna_metrics_csvs, sample_ids, args.samplesheet)
     summary, target_reads_per_cell = add_downsampling_targets(
         summary, target_reads_per_cell=args.target_reads_per_cell
     )

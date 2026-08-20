@@ -8,7 +8,7 @@
     {
       "type": "data",
       "id": "samplesheet",
-      "helpText": "CSV describing the batch (columns: sample_id, dragen_results_dir, crispr_h5ad, +metadata)",
+      "helpText": "CSV describing the batch (columns: sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad, +metadata)",
       "label": "samplesheet",
       "minValues": 1,
       "maxValues": 1,
@@ -18,13 +18,46 @@
     },
     {
       "type": "data",
-      "id": "dragen_results_dirs",
-      "helpText": "All DRAGEN results directories referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
-      "label": "dragen_results_dirs",
+      "id": "molecule_info_h5s",
+      "helpText": "All DRAGEN scRNA molecule-info h5 files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
+      "label": "molecule_info_h5s",
       "minValues": 1,
       "maxValues": 999,
       "dataFilter": {
-        "dataType": "folder"
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "filtered_barcodes_tsvs",
+      "helpText": "All DRAGEN filtered-barcodes files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
+      "label": "filtered_barcodes_tsvs",
+      "minValues": 1,
+      "maxValues": 999,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "scrna_metrics_csvs",
+      "helpText": "All DRAGEN scRNA_metrics.csv files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
+      "label": "scrna_metrics_csvs",
+      "minValues": 1,
+      "maxValues": 999,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "features_tsvs",
+      "helpText": "All DRAGEN raw features.tsv.gz files referenced by samplesheet's (optional) features_tsv column -- required so ICA localizes them onto the compute node, only needed for combined GEX+CRISPR molecule-info h5s. Not read directly by the pipeline.",
+      "label": "features_tsvs",
+      "minValues": 0,
+      "maxValues": 999,
+      "dataFilter": {
+        "dataType": "file"
       }
     },
     {

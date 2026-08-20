@@ -13,13 +13,46 @@
     },
     {
       "type": "data",
-      "id": "dragen_results_dir",
-      "helpText": "DRAGEN scRNA results directory for the sample. Required when run_gex_downsample is true.",
-      "label": "dragen_results_dir",
+      "id": "molecule_info_h5",
+      "helpText": "DRAGEN scRNA molecule-info h5 for the sample. Required when run_gex_downsample is true.",
+      "label": "molecule_info_h5",
       "minValues": 0,
       "maxValues": 1,
       "dataFilter": {
-        "dataType": "folder"
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "filtered_barcodes_tsv",
+      "helpText": "DRAGEN filtered-barcodes list for the sample. Required when run_gex_downsample is true.",
+      "label": "filtered_barcodes_tsv",
+      "minValues": 0,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "scrna_metrics_csv",
+      "helpText": "DRAGEN scRNA_metrics.csv for the sample. Required when run_gex_downsample is true.",
+      "label": "scrna_metrics_csv",
+      "minValues": 0,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "file"
+      }
+    },
+    {
+      "type": "data",
+      "id": "features_tsv",
+      "helpText": "DRAGEN raw features.tsv.gz for the sample. Optional -- only needed when molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5.",
+      "label": "features_tsv",
+      "minValues": 0,
+      "maxValues": 1,
+      "dataFilter": {
+        "dataType": "file"
       }
     },
     {

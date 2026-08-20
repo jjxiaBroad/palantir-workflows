@@ -14,9 +14,9 @@ rather than silently ignored).
 
 All samples are then concatenated along the cell axis into one combined
 AnnData, and every column from --samplesheet other than
-sample_id/dragen_results_dir/crispr_h5ad is attached to the combined
-AnnData's .obs (keyed by sample_id), so every cell carries its sample's full
-metadata row.
+sample_id/molecule_info_h5/scrna_metrics_csv/filtered_barcodes_tsv/
+features_tsv/crispr_h5ad is attached to the combined AnnData's .obs (keyed by
+sample_id), so every cell carries its sample's full metadata row.
 
 Usage:
     python combine_downsampled_batch.py \\
@@ -36,7 +36,10 @@ import pandas as pd
 from downsample_combine_common import find_one, load_gex_from_matrix_dir, load_downsampled_grna_from_h5ad, merge_gex_and_grna
 
 # Samplesheet columns that locate files rather than describe sample metadata.
-SAMPLESHEET_PATH_COLUMNS = {"sample_id", "dragen_results_dir", "crispr_h5ad"}
+SAMPLESHEET_PATH_COLUMNS = {
+    "sample_id", "molecule_info_h5", "scrna_metrics_csv", "filtered_barcodes_tsv",
+    "features_tsv", "crispr_h5ad",
+}
 
 
 def parse_args(argv=None):

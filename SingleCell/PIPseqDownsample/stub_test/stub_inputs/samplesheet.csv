@@ -1,3 +1,3 @@
-sample_id,dragen_results_dir,crispr_h5ad,condition
-sample1,stub_inputs/downsample_dragen_results/sample1,stub_inputs/crispr_sample1.stub.h5ad,treated
-sample2,stub_inputs/downsample_dragen_results/sample2,stub_inputs/crispr_sample2.stub.h5ad,control
+sample_id,molecule_info_h5,filtered_barcodes_tsv,scrna_metrics_csv,features_tsv,crispr_h5ad,condition
+sample1,stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.moleculeInfo.h5,stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.filtered.barcodes.tsv.gz,stub_inputs/downsample_dragen_results/sample1/sample1.scRNA_metrics.csv,stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.features.tsv.gz,stub_inputs/crispr_sample1.stub.h5ad,treated
+sample2,stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.moleculeInfo.h5,stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.filtered.barcodes.tsv.gz,stub_inputs/downsample_dragen_results/sample2/sample2.scRNA_metrics.csv,stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.features.tsv.gz,stub_inputs/crispr_sample2.stub.h5ad,control

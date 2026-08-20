@@ -1,6 +1,8 @@
 {
     "sample_id": "test_sample",
-    "dragen_results_dir": "/experiments/MDL-1898/sample1/dragen_output",
+    "molecule_info_h5": "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA.moleculeInfo.h5",
+    "filtered_barcodes_tsv": "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA.filtered.barcodes.tsv.gz",
+    "scrna_metrics_csv": "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA_metrics.csv",
     "crispr_h5ad": "/experiments/MDL-1898/sample1/adata/sample1.crispr.h5ad",
     "gex_target_depths": [5000, 10000, 20000],
     "crispr_target_depths": [500, 1000, 2000],

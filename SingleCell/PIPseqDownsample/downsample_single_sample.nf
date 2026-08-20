@@ -26,17 +26,25 @@ include { COMBINE_DOWNSAMPLED_DEPTHS } from './modules/combine_downsampled_depth
 def helpMessage() {
     log.info"""
     Usage:
-      nextflow run downsample_single_sample.nf --sample_id <id> --dragen_results_dir <dir> \\
+      nextflow run downsample_single_sample.nf --sample_id <id> --molecule_info_h5 <h5> \\
+          --filtered_barcodes_tsv <tsv.gz> --scrna_metrics_csv <csv> \\
           --crispr_h5ad <file> --gex_target_depths <ints> --crispr_target_depths <ints> \\
           --qc_container <image> [options]
 
     Required arguments:
       --sample_id                Sample identifier
-      --dragen_results_dir       DRAGEN scRNA results directory for the sample (required if --run_gex_downsample)
+      --molecule_info_h5         DRAGEN scRNA molecule-info h5 for the sample (required if --run_gex_downsample)
+      --filtered_barcodes_tsv    DRAGEN filtered-barcodes list for the sample (required if --run_gex_downsample)
+      --scrna_metrics_csv        DRAGEN scRNA_metrics.csv for the sample (required if --run_gex_downsample)
       --crispr_h5ad              CRISPR guide-capture AnnData (.h5ad) for the sample (required if --run_crispr_downsample)
       --gex_target_depths        One or more GEX target reads/cell depths (required if --run_gex_downsample)
       --crispr_target_depths     One or more gRNA target reads/cell depths (required if --run_crispr_downsample)
       --qc_container             Container image for QC/downsample processing
+
+    Optional data arguments:
+      --features_tsv             DRAGEN raw features.tsv.gz for the sample -- only needed when
+                                  --molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5 (see
+                                  downsample_molecule_info.py)
 
     Optional arguments:
       --run_gex_downsample       Whether to downsample GEX molecule-info (default: true)
@@ -84,7 +92,11 @@ def writeOutputManifest() {
 
 // Define parameters
 params.sample_id = null                // Sample identifier
-params.dragen_results_dir = null       // DRAGEN scRNA results directory for the sample
+params.molecule_info_h5 = null         // DRAGEN scRNA molecule-info h5 for the sample
+params.filtered_barcodes_tsv = null    // DRAGEN filtered-barcodes list for the sample
+params.scrna_metrics_csv = null        // DRAGEN scRNA_metrics.csv for the sample
+params.features_tsv = null             // DRAGEN raw features.tsv.gz for the sample (optional; only
+                                        // needed for a combined GEX+CRISPR molecule_info_h5)
 params.crispr_h5ad = null              // CRISPR guide-capture AnnData for the sample
 params.outdir = "out"                  // Output directory
 params.help = false
@@ -111,8 +123,9 @@ workflow {
     log.info paramsSummaryLog(workflow)
 
     // --- Business-logic checks that can't be expressed in JSON Schema ---
-    if (params.run_gex_downsample && !params.dragen_results_dir) {
-        log.error "ERROR: --run_gex_downsample is true, but --dragen_results_dir was not given."
+    if (params.run_gex_downsample && !(params.molecule_info_h5 && params.filtered_barcodes_tsv && params.scrna_metrics_csv)) {
+        log.error "ERROR: --run_gex_downsample is true, but --molecule_info_h5/--filtered_barcodes_tsv/" +
+            "--scrna_metrics_csv were not all given."
         exit 1
     }
     if (params.run_gex_downsample && !params.gex_target_depths) {
@@ -139,7 +152,13 @@ workflow {
     gex_input_ch = Channel.empty()
     gex_target_depths_ch = Channel.value([depths: []])
     if (params.run_gex_downsample) {
-        gex_input_ch = Channel.of(tuple(params.sample_id, file(params.dragen_results_dir)))
+        gex_input_ch = Channel.of(tuple(
+            params.sample_id,
+            file(params.molecule_info_h5),
+            file(params.filtered_barcodes_tsv),
+            file(params.scrna_metrics_csv),
+            params.features_tsv ? file(params.features_tsv) : file('NO_FILE')
+        ))
         gex_target_depths_ch = Channel.value([depths: params.gex_target_depths])
     }
 

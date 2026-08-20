@@ -15,23 +15,23 @@ process SUMMARIZE_GEX_DOWNSAMPLE_TARGETS {
     memory "${params.memory_gb_summarize_gex_downsample_targets}.GB"
 
     input:
-    // stageAs avoids a staging collision: every sample's dragen_results_dir commonly
-    // shares the same basename (e.g. "dragen_output").
-    tuple path(dragen_results_dirs, stageAs: 'dragen_dir_*'), val(sample_ids), path(samplesheet)
+    // stageAs avoids a staging collision if multiple samples' scRNA_metrics.csv happen to
+    // share a basename.
+    tuple path(scrna_metrics_csvs, stageAs: 'scrna_metrics_csv_*'), val(sample_ids), path(samplesheet)
 
     output:
     path "gex_downsample_summary.csv", emit: summary
     path "gex_target_depth.txt", emit: target_depth
 
     script:
-    def dirs = dragen_results_dirs.join(' ')
+    def csvs = scrna_metrics_csvs.join(' ')
     def ids = sample_ids.join(',')
     def target_override = params.gex_target_depth ? "--target-reads-per-cell ${params.gex_target_depth}" : ''
     """
     set -ex
 
     summarize_gex_downsample_targets.py \\
-        --dragen-results-dirs ${dirs} \\
+        --scrna-metrics-csvs ${csvs} \\
         --sample-ids ${ids} \\
         --samplesheet ${samplesheet} \\
         --output gex_downsample_summary.csv \\

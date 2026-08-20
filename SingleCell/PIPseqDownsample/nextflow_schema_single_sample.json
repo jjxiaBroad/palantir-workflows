@@ -19,12 +19,33 @@
                     "description": "Sample identifier",
                     "fa_icon": "fas fa-tag"
                 },
-                "dragen_results_dir": {
+                "molecule_info_h5": {
                     "type": "string",
-                    "format": "directory-path",
-                    "description": "DRAGEN scRNA results directory for the sample",
+                    "format": "file-path",
+                    "description": "DRAGEN scRNA molecule-info h5 for the sample",
                     "help_text": "Required when --run_gex_downsample is true.",
-                    "fa_icon": "fas fa-folder"
+                    "fa_icon": "fas fa-file"
+                },
+                "filtered_barcodes_tsv": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "DRAGEN filtered-barcodes list for the sample",
+                    "help_text": "Required when --run_gex_downsample is true.",
+                    "fa_icon": "fas fa-file"
+                },
+                "scrna_metrics_csv": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "DRAGEN scRNA_metrics.csv for the sample",
+                    "help_text": "Required when --run_gex_downsample is true.",
+                    "fa_icon": "fas fa-file"
+                },
+                "features_tsv": {
+                    "type": "string",
+                    "format": "file-path",
+                    "description": "DRAGEN raw features.tsv.gz for the sample",
+                    "help_text": "Optional -- only needed when --molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5.",
+                    "fa_icon": "fas fa-file"
                 },
                 "crispr_h5ad": {
                     "type": "string",

@@ -33,16 +33,27 @@ def helpMessage() {
           --qc_container <image> [options]
 
     Required arguments:
-      --samplesheet              CSV describing the batch (columns: sample_id, dragen_results_dir, crispr_h5ad, +metadata)
-      --dragen_results_dirs      All DRAGEN results directories referenced by --samplesheet (needed so ICA localizes them onto the compute node; not read directly by the pipeline)
-      --crispr_h5ads             All crispr_h5ad files referenced by --samplesheet (same reasoning as --dragen_results_dirs)
+      --samplesheet              CSV describing the batch (columns: sample_id, molecule_info_h5,
+                                  filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad, +metadata)
+      --molecule_info_h5s        All molecule_info_h5 files referenced by --samplesheet (needed so ICA localizes them onto the compute node; not read directly by the pipeline)
+      --filtered_barcodes_tsvs   All filtered_barcodes_tsv files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
+      --scrna_metrics_csvs       All scrna_metrics_csv files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
+      --crispr_h5ads             All crispr_h5ad files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
       --batch_id                 Batch identifier
       --batch_basename           Batch basename for output organization
       --qc_container             Container image for QC/downsample processing
 
+    Optional data arguments:
+      --features_tsvs            All features_tsv files referenced by --samplesheet, for any row that
+                                  sets one -- only needed when a sample's molecule_info_h5 is a combined
+                                  GEX+CRISPR DRAGEN h5 (see downsample_molecule_info.py); same
+                                  localization reasoning as --molecule_info_h5s
+
     Samplesheet format:
-      CSV file with columns: sample_id, dragen_results_dir, crispr_h5ad
-      - dragen_results_dir is required for every row when --run_gex_downsample is true
+      CSV file with columns: sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad
+      - molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv are required for every row when
+        --run_gex_downsample is true
+      - features_tsv is optional (blank unless the row's molecule_info_h5 is a combined GEX+CRISPR h5)
       - crispr_h5ad is required for every row when --run_crispr_downsample is true
       - any other column is treated as per-sample metadata and carried through into the
         downsample summary CSVs and the final combined AnnData's .obs
@@ -97,10 +108,14 @@ def writeOutputManifest() {
 }
 
 // Define parameters
-params.samplesheet = null              // CSV: sample_id, dragen_results_dir, crispr_h5ad, +metadata columns
-params.dragen_results_dirs = null      // Unused by the pipeline directly -- exists so ICA localizes the
-                                        // directories referenced by path inside --samplesheet's CSV.
-params.crispr_h5ads = null             // Same idea as --dragen_results_dirs, for the crispr_h5ad column.
+params.samplesheet = null              // CSV: sample_id, molecule_info_h5, filtered_barcodes_tsv,
+                                        // scrna_metrics_csv, features_tsv, crispr_h5ad, +metadata columns
+params.molecule_info_h5s = null        // Unused by the pipeline directly -- exists so ICA localizes the
+                                        // files referenced by path inside --samplesheet's CSV.
+params.filtered_barcodes_tsvs = null   // Same idea as --molecule_info_h5s, for the filtered_barcodes_tsv column.
+params.scrna_metrics_csvs = null       // Same idea as --molecule_info_h5s, for the scrna_metrics_csv column.
+params.features_tsvs = []              // Same idea as --molecule_info_h5s, for the (optional) features_tsv column.
+params.crispr_h5ads = null             // Same idea as --molecule_info_h5s, for the crispr_h5ad column.
 // batch_id/batch_basename are intentionally not declared here (same convention as
 // main.nf's supersample_id/supersample_basename) -- batch_basename's default lives in
 // nextflow.config (needed early, for the timeline/report/trace/dag file paths), and
@@ -138,17 +153,23 @@ workflow {
         .map { row ->
             [
                 sample_id: row.sample_id,
-                dragen_results_dir: row.dragen_results_dir,
+                molecule_info_h5: row.molecule_info_h5,
+                filtered_barcodes_tsv: row.filtered_barcodes_tsv,
+                scrna_metrics_csv: row.scrna_metrics_csv,
+                features_tsv: row.features_tsv,
                 crispr_h5ad: row.crispr_h5ad
             ]
         }
         .toList()
         .flatMap { rows ->
             if (params.run_gex_downsample) {
-                def missing = rows.findAll { !it.dragen_results_dir?.trim() }
+                def missing = rows.findAll {
+                    !it.molecule_info_h5?.trim() || !it.filtered_barcodes_tsv?.trim() || !it.scrna_metrics_csv?.trim()
+                }
                 if (missing) {
                     log.error "ERROR: --run_gex_downsample is true, but the following sample(s) in " +
-                        "--samplesheet have no dragen_results_dir: " + missing.collect { it.sample_id }.join(', ')
+                        "--samplesheet are missing molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv: " +
+                        missing.collect { it.sample_id }.join(', ')
                     exit 1
                 }
             }
@@ -177,7 +198,7 @@ workflow {
         log.info "Summarizing GEX downsample targets across the batch..."
 
         gex_summary_input = sample_info
-            .map { s -> tuple(file(s.dragen_results_dir), s.sample_id) }
+            .map { s -> tuple(file(s.scrna_metrics_csv), s.sample_id) }
             .toList()
             .map { pairs -> tuple(pairs.collect { it[0] }, pairs.collect { it[1] }, file(params.samplesheet)) }
 
@@ -186,7 +207,15 @@ workflow {
         gex_target_depths_ch = SUMMARIZE_GEX_DOWNSAMPLE_TARGETS.out.target_depth
             .map { [depths: [it.text.trim() as Integer]] }
 
-        gex_input_ch = sample_info.map { s -> tuple(s.sample_id, file(s.dragen_results_dir)) }
+        gex_input_ch = sample_info.map { s ->
+            tuple(
+                s.sample_id,
+                file(s.molecule_info_h5),
+                file(s.filtered_barcodes_tsv),
+                file(s.scrna_metrics_csv),
+                s.features_tsv?.trim() ? file(s.features_tsv) : file('NO_FILE')
+            )
+        }
     }
 
     crispr_target_depths_ch = Channel.value([depths: []])

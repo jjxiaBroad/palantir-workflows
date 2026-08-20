@@ -16,7 +16,9 @@ params.run_crispr_downsample = true
 
 workflow DOWNSAMPLE_SAMPLES {
     take:
-    gex_input            // channel of (sample_id, dragen_results_dir) -- only consumed if run_gex_downsample
+    gex_input            // channel of (sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv,
+                          // features_tsv) -- only consumed if run_gex_downsample. features_tsv is a
+                          // file('NO_FILE') sentinel when not given (see downsample_molecule_info.py).
     crispr_input         // channel of (sample_id, crispr_h5ad) -- only consumed if run_crispr_downsample
     run_basename         // String or null: optional top-level output folder nested above each
                           // sample's own subdirectory (batch_basename for downsample.nf; null for
@@ -38,8 +40,11 @@ workflow DOWNSAMPLE_SAMPLES {
     if (params.run_gex_downsample) {
         downsample_gex_input = gex_input
             .combine(gex_target_depths)
-            .map { sample_id, dragen_results_dir, depths_map ->
-                tuple([sample_id: sample_id, run_basename: run_basename, target_depths: depths_map.depths], dragen_results_dir)
+            .map { sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, depths_map ->
+                tuple(
+                    [sample_id: sample_id, run_basename: run_basename, target_depths: depths_map.depths],
+                    molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv
+                )
             }
         DOWNSAMPLE_MOLECULE_INFO(downsample_gex_input)
         gex_matrices_ch = DOWNSAMPLE_MOLECULE_INFO.out.matrices

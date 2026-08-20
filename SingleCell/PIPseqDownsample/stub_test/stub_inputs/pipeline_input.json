@@ -2,9 +2,21 @@
     "batch_id": "stub_batch",
     "batch_basename": "stub_batch",
     "samplesheet": "stub_inputs/samplesheet.csv",
-    "dragen_results_dirs": [
-        "stub_inputs/downsample_dragen_results/sample1",
-        "stub_inputs/downsample_dragen_results/sample2"
+    "molecule_info_h5s": [
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.moleculeInfo.h5",
+        "stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.moleculeInfo.h5"
+    ],
+    "filtered_barcodes_tsvs": [
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.filtered.barcodes.tsv.gz",
+        "stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.filtered.barcodes.tsv.gz"
+    ],
+    "scrna_metrics_csvs": [
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA_metrics.csv",
+        "stub_inputs/downsample_dragen_results/sample2/sample2.scRNA_metrics.csv"
+    ],
+    "features_tsvs": [
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.features.tsv.gz",
+        "stub_inputs/downsample_dragen_results/sample2/sample2.scRNA.features.tsv.gz"
     ],
     "crispr_h5ads": [
         "stub_inputs/crispr_sample1.stub.h5ad",

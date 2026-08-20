@@ -28,8 +28,9 @@ process DOWNSAMPLE_MOLECULE_INFO {
     // meta: [sample_id, run_basename, target_depths] -- run_basename is whatever top-level
     // output folder the calling entrypoint organizes this run under (batch_basename for
     // downsample.nf, sample_id for downsample_single_sample.nf), target_depths a list of one
-    // or more reads-per-cell depths.
-    tuple val(meta), path(dragen_results_dir)
+    // or more reads-per-cell depths. features_tsv is a 'NO_FILE' sentinel when not given --
+    // only combined GEX+CRISPR molecule-info h5s need it (see downsample_molecule_info.py).
+    tuple val(meta), path(molecule_info_h5), path(filtered_barcodes_tsv), path(scrna_metrics_csv), path(features_tsv)
 
     output:
     // Aggregate combine steps collect one of these per sample into a list -- since every
@@ -44,17 +45,20 @@ process DOWNSAMPLE_MOLECULE_INFO {
     def saturation_args = params.run_saturation
         ? ' --saturation' + (params.saturation_extra_depths ? " --saturation-extra-depths ${params.saturation_extra_depths.join(' ')}" : '')
         : ''
+    def features_args = features_tsv.name != 'NO_FILE' ? " --features-tsv ${features_tsv}" : ''
     """
     set -ex
 
     downsample_molecule_info.py \\
-        --dragen-results-dir ${dragen_results_dir} \\
+        --molecule-info-h5 ${molecule_info_h5} \\
+        --filtered-barcodes ${filtered_barcodes_tsv} \\
+        --scrna-metrics-csv ${scrna_metrics_csv} \\
         --output-dir . \\
         --matrix-depths ${meta.target_depths.join(' ')} \\
         --matrix-format filtered \\
         --min-reads-per-cell ${params.min_reads_per_cell} \\
         --random-seed ${params.random_seed} \\
-        --threads ${task.cpus}${saturation_args}
+        --threads ${task.cpus}${saturation_args}${features_args}
     """
 
     stub:
