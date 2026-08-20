@@ -19,39 +19,14 @@
                     "description": "Sample identifier",
                     "fa_icon": "fas fa-tag"
                 },
-                "molecule_info_h5": {
-                    "type": "string",
-                    "format": "file-path",
-                    "description": "DRAGEN scRNA molecule-info h5 for the sample",
-                    "help_text": "Required when --run_gex_downsample is true.",
-                    "fa_icon": "fas fa-file"
-                },
-                "filtered_barcodes_tsv": {
-                    "type": "string",
-                    "format": "file-path",
-                    "description": "DRAGEN filtered-barcodes list for the sample",
-                    "help_text": "Required when --run_gex_downsample is true.",
-                    "fa_icon": "fas fa-file"
-                },
-                "scrna_metrics_csv": {
-                    "type": "string",
-                    "format": "file-path",
-                    "description": "DRAGEN scRNA_metrics.csv for the sample",
-                    "help_text": "Required when --run_gex_downsample is true.",
-                    "fa_icon": "fas fa-file"
-                },
-                "features_tsv": {
-                    "type": "string",
-                    "format": "file-path",
-                    "description": "DRAGEN raw features.tsv.gz for the sample",
-                    "help_text": "Optional -- only needed when --molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5.",
-                    "fa_icon": "fas fa-file"
-                },
-                "crispr_h5ad": {
-                    "type": "string",
-                    "format": "file-path",
-                    "description": "CRISPR guide-capture AnnData (.h5ad) for the sample",
-                    "help_text": "Required when --run_crispr_downsample is true.",
+                "input_files": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "format": "file-path"
+                    },
+                    "description": "All of the sample's DRAGEN scRNA output + gRNA AnnData files, in any order",
+                    "help_text": "The molecule-info h5, filtered-barcodes list, and scRNA_metrics.csv (required when --run_gex_downsample is true), the optional features.tsv.gz (only for a combined GEX+CRISPR molecule_info_h5), and the CRISPR guide-capture AnnData .h5ad (required when --run_crispr_downsample is true). Each file's role is auto-detected from its DRAGEN filename suffix -- see helpMessage()/CLAUDE.md -- so files can be selected together in any order.",
                     "fa_icon": "fas fa-file"
                 },
                 "outdir": {

@@ -13,55 +13,11 @@
     },
     {
       "type": "data",
-      "id": "molecule_info_h5",
-      "helpText": "DRAGEN scRNA molecule-info h5 for the sample. Required when run_gex_downsample is true.",
-      "label": "molecule_info_h5",
-      "minValues": 0,
-      "maxValues": 1,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "filtered_barcodes_tsv",
-      "helpText": "DRAGEN filtered-barcodes list for the sample. Required when run_gex_downsample is true.",
-      "label": "filtered_barcodes_tsv",
-      "minValues": 0,
-      "maxValues": 1,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "scrna_metrics_csv",
-      "helpText": "DRAGEN scRNA_metrics.csv for the sample. Required when run_gex_downsample is true.",
-      "label": "scrna_metrics_csv",
-      "minValues": 0,
-      "maxValues": 1,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "features_tsv",
-      "helpText": "DRAGEN raw features.tsv.gz for the sample. Optional -- only needed when molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5.",
-      "label": "features_tsv",
-      "minValues": 0,
-      "maxValues": 1,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "crispr_h5ad",
-      "helpText": "CRISPR guide-capture AnnData (.h5ad) for the sample. Required when run_crispr_downsample is true.",
-      "label": "crispr_h5ad",
-      "minValues": 0,
-      "maxValues": 1,
+      "id": "input_files",
+      "helpText": "All of the sample's DRAGEN scRNA output + gRNA AnnData files, selected together: molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv (required when run_gex_downsample is true), the optional features_tsv (only for a combined GEX+CRISPR molecule_info_h5), and crispr_h5ad (required when run_crispr_downsample is true). Each file's role is auto-detected from its DRAGEN filename suffix, so order doesn't matter.",
+      "label": "input_files",
+      "minValues": 1,
+      "maxValues": 999,
       "dataFilter": {
         "dataType": "file"
       }

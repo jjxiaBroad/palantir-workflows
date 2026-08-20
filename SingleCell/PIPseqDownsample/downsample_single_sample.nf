@@ -26,25 +26,26 @@ include { COMBINE_DOWNSAMPLED_DEPTHS } from './modules/combine_downsampled_depth
 def helpMessage() {
     log.info"""
     Usage:
-      nextflow run downsample_single_sample.nf --sample_id <id> --molecule_info_h5 <h5> \\
-          --filtered_barcodes_tsv <tsv.gz> --scrna_metrics_csv <csv> \\
-          --crispr_h5ad <file> --gex_target_depths <ints> --crispr_target_depths <ints> \\
-          --qc_container <image> [options]
+      nextflow run downsample_single_sample.nf --sample_id <id> \\
+          --input_files <molecule_info_h5>,<filtered_barcodes_tsv>,<scrna_metrics_csv>,<crispr_h5ad> \\
+          --gex_target_depths <ints> --crispr_target_depths <ints> --qc_container <image> [options]
 
     Required arguments:
       --sample_id                Sample identifier
-      --molecule_info_h5         DRAGEN scRNA molecule-info h5 for the sample (required if --run_gex_downsample)
-      --filtered_barcodes_tsv    DRAGEN filtered-barcodes list for the sample (required if --run_gex_downsample)
-      --scrna_metrics_csv        DRAGEN scRNA_metrics.csv for the sample (required if --run_gex_downsample)
-      --crispr_h5ad              CRISPR guide-capture AnnData (.h5ad) for the sample (required if --run_crispr_downsample)
+      --input_files              All of the sample's DRAGEN scRNA output + gRNA AnnData files, in
+                                  any order: molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv
+                                  (required if --run_gex_downsample), the optional features_tsv (only
+                                  for a combined GEX+CRISPR molecule_info_h5), and crispr_h5ad
+                                  (required if --run_crispr_downsample). Each file's role is
+                                  auto-detected from its DRAGEN filename suffix:
+                                    *scRNA.moleculeInfo.h5        -> molecule_info_h5
+                                    *scRNA.filtered.barcodes.tsv.gz -> filtered_barcodes_tsv
+                                    *scRNA_metrics.csv             -> scrna_metrics_csv
+                                    *scRNA.features.tsv.gz         -> features_tsv
+                                    *.h5ad                         -> crispr_h5ad
       --gex_target_depths        One or more GEX target reads/cell depths (required if --run_gex_downsample)
       --crispr_target_depths     One or more gRNA target reads/cell depths (required if --run_crispr_downsample)
       --qc_container             Container image for QC/downsample processing
-
-    Optional data arguments:
-      --features_tsv             DRAGEN raw features.tsv.gz for the sample -- only needed when
-                                  --molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5 (see
-                                  downsample_molecule_info.py)
 
     Optional arguments:
       --run_gex_downsample       Whether to downsample GEX molecule-info (default: true)
@@ -90,14 +91,55 @@ def writeOutputManifest() {
         """.stripIndent()
 }
 
+// Classify --input_files by DRAGEN filename suffix -- this is what lets ICA users select every
+// file for the sample together in one field instead of one per role (there's no samplesheet here
+// to assign roles explicitly, unlike downsample.nf's batch mode). Suffixes mirror
+// bin/downsample_molecule_info.py's DRAGEN_*_SUFFIX constants. Order matters only in that
+// features.tsv.gz must be checked before a hypothetical looser molecule-info match; none of these
+// suffixes actually overlap.
+def classifyInputFiles(input_files) {
+    def result = [molecule_info_h5: null, filtered_barcodes_tsv: null, scrna_metrics_csv: null,
+                   features_tsv: null, crispr_h5ad: null]
+    def matchedBy = [:]
+    def unmatched = []
+
+    input_files.each { path ->
+        def name = file(path).name
+        def role =
+            name.endsWith('scRNA.features.tsv.gz') ? 'features_tsv' :
+            name.endsWith('scRNA.moleculeInfo.h5') ? 'molecule_info_h5' :
+            name.endsWith('scRNA.filtered.barcodes.tsv.gz') ? 'filtered_barcodes_tsv' :
+            name.endsWith('scRNA_metrics.csv') ? 'scrna_metrics_csv' :
+            name.endsWith('.h5ad') ? 'crispr_h5ad' :
+            null
+
+        if (role == null) {
+            unmatched << path
+            return
+        }
+        if (result[role] != null) {
+            log.error "ERROR: --input_files has more than one file matching '${role}': " +
+                "'${matchedBy[role]}' and '${path}'."
+            exit 1
+        }
+        result[role] = file(path)
+        matchedBy[role] = path
+    }
+
+    if (unmatched) {
+        log.error "ERROR: --input_files has file(s) that don't match any known DRAGEN/CRISPR " +
+            "filename suffix (expected one of *scRNA.moleculeInfo.h5, " +
+            "*scRNA.filtered.barcodes.tsv.gz, *scRNA_metrics.csv, *scRNA.features.tsv.gz, " +
+            "*.h5ad): " + unmatched.join(', ')
+        exit 1
+    }
+    return result
+}
+
 // Define parameters
 params.sample_id = null                // Sample identifier
-params.molecule_info_h5 = null         // DRAGEN scRNA molecule-info h5 for the sample
-params.filtered_barcodes_tsv = null    // DRAGEN filtered-barcodes list for the sample
-params.scrna_metrics_csv = null        // DRAGEN scRNA_metrics.csv for the sample
-params.features_tsv = null             // DRAGEN raw features.tsv.gz for the sample (optional; only
-                                        // needed for a combined GEX+CRISPR molecule_info_h5)
-params.crispr_h5ad = null              // CRISPR guide-capture AnnData for the sample
+params.input_files = []                // All of the sample's DRAGEN scRNA + gRNA AnnData files;
+                                        // role is auto-detected per file, see classifyInputFiles()
 params.outdir = "out"                  // Output directory
 params.help = false
 params.qc_container = null             // QC container image
@@ -123,17 +165,19 @@ workflow {
     log.info paramsSummaryLog(workflow)
 
     // --- Business-logic checks that can't be expressed in JSON Schema ---
-    if (params.run_gex_downsample && !(params.molecule_info_h5 && params.filtered_barcodes_tsv && params.scrna_metrics_csv)) {
-        log.error "ERROR: --run_gex_downsample is true, but --molecule_info_h5/--filtered_barcodes_tsv/" +
-            "--scrna_metrics_csv were not all given."
+    def input = classifyInputFiles(params.input_files)
+
+    if (params.run_gex_downsample && !(input.molecule_info_h5 && input.filtered_barcodes_tsv && input.scrna_metrics_csv)) {
+        log.error "ERROR: --run_gex_downsample is true, but --input_files did not include a " +
+            "molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv (all three required)."
         exit 1
     }
     if (params.run_gex_downsample && !params.gex_target_depths) {
         log.error "ERROR: --run_gex_downsample is true, but --gex_target_depths was not given."
         exit 1
     }
-    if (params.run_crispr_downsample && !params.crispr_h5ad) {
-        log.error "ERROR: --run_crispr_downsample is true, but --crispr_h5ad was not given."
+    if (params.run_crispr_downsample && !input.crispr_h5ad) {
+        log.error "ERROR: --run_crispr_downsample is true, but --input_files did not include a crispr_h5ad."
         exit 1
     }
     if (params.run_crispr_downsample && !params.crispr_target_depths) {
@@ -154,10 +198,10 @@ workflow {
     if (params.run_gex_downsample) {
         gex_input_ch = Channel.of(tuple(
             params.sample_id,
-            file(params.molecule_info_h5),
-            file(params.filtered_barcodes_tsv),
-            file(params.scrna_metrics_csv),
-            params.features_tsv ? file(params.features_tsv) : file('NO_FILE')
+            input.molecule_info_h5,
+            input.filtered_barcodes_tsv,
+            input.scrna_metrics_csv,
+            input.features_tsv ?: file('NO_FILE')
         ))
         gex_target_depths_ch = Channel.value([depths: params.gex_target_depths])
     }
@@ -165,7 +209,7 @@ workflow {
     crispr_input_ch = Channel.empty()
     crispr_target_depths_ch = Channel.value([depths: []])
     if (params.run_crispr_downsample) {
-        crispr_input_ch = Channel.of(tuple(params.sample_id, file(params.crispr_h5ad)))
+        crispr_input_ch = Channel.of(tuple(params.sample_id, input.crispr_h5ad))
         crispr_target_depths_ch = Channel.value([depths: params.crispr_target_depths])
     }
 

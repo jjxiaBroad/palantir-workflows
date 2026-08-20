@@ -22,7 +22,7 @@ Given a `--samplesheet` (columns: `sample_id, molecule_info_h5, filtered_barcode
 
 ### Single-sample multi-depth (`downsample_single_sample.nf`)
 
-Given one sample's `--molecule_info_h5`/`--filtered_barcodes_tsv`/`--scrna_metrics_csv` (and/or `--crispr_h5ad`), plus one or more `--gex_target_depths`/`--crispr_target_depths`:
+Given one sample's `--input_files` (molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv and/or crispr_h5ad, role auto-detected per file — see below), plus one or more `--gex_target_depths`/`--crispr_target_depths`:
 
 1. Downsamples the sample's GEX molecule-info and/or gRNA AnnData to *every* requested depth (one downsampled matrix/AnnData per depth), via the same two scripts `downsample.nf` uses. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep (see below).
 2. Combines the downsampled GEX + gRNA data *across depths* into one AnnData (`bin/combine_downsampled_depths.py`), annotated with an integer `depth` column — only if both branches ran (`--run_combine`, default `true`).
@@ -147,10 +147,7 @@ A `README.txt` describing this layout is written directly into `${params.outdir}
 ```bash
 nextflow run downsample_single_sample.nf \
   --sample_id "Sample_A" \
-  --molecule_info_h5 sample_a/sample_a.scRNA.moleculeInfo.h5 \
-  --filtered_barcodes_tsv sample_a/sample_a.scRNA.filtered.barcodes.tsv.gz \
-  --scrna_metrics_csv sample_a/sample_a.scRNA_metrics.csv \
-  --crispr_h5ad sample_a/adata/sample_a.crispr.h5ad \
+  --input_files sample_a/sample_a.scRNA.moleculeInfo.h5,sample_a/sample_a.scRNA.filtered.barcodes.tsv.gz,sample_a/sample_a.scRNA_metrics.csv,sample_a/adata/sample_a.crispr.h5ad \
   --gex_target_depths 5000 10000 20000 \
   --crispr_target_depths 500 1000 2000 \
   --qc_container <qc image> \
@@ -159,15 +156,15 @@ nextflow run downsample_single_sample.nf \
 
 **Required:**
 - `--sample_id`: Sample identifier
-- `--molecule_info_h5`: DRAGEN scRNA molecule-info h5 for the sample (required when `--run_gex_downsample` is `true`)
-- `--filtered_barcodes_tsv`: DRAGEN filtered-barcodes list for the sample (required when `--run_gex_downsample` is `true`)
-- `--scrna_metrics_csv`: DRAGEN scRNA_metrics.csv for the sample (required when `--run_gex_downsample` is `true`)
-- `--crispr_h5ad`: CRISPR guide-capture AnnData for the sample (required when `--run_crispr_downsample` is `true`)
+- `--input_files`: All of the sample's files, in any order. Each file's role is auto-detected from its DRAGEN/CRISPR filename suffix — no per-role flags to fill in separately:
+  - `*scRNA.moleculeInfo.h5` → molecule_info_h5, `*scRNA.filtered.barcodes.tsv.gz` → filtered_barcodes_tsv, `*scRNA_metrics.csv` → scrna_metrics_csv (all three required when `--run_gex_downsample` is `true`)
+  - `*scRNA.features.tsv.gz` → features_tsv (optional — only needed when the molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5)
+  - `*.h5ad` → crispr_h5ad (required when `--run_crispr_downsample` is `true`)
 - `--gex_target_depths`: one or more GEX target reads/cell depths (required when `--run_gex_downsample` is `true`)
 - `--crispr_target_depths`: one or more gRNA target reads/cell depths (required when `--run_crispr_downsample` is `true`)
 - `--qc_container`: Container image for QC/downsample processing
 
-**Optional:** `--features_tsv` (DRAGEN raw features.tsv.gz, only needed when `--molecule_info_h5` is a combined GEX+CRISPR DRAGEN h5), plus the same `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine` / `--run_saturation` / `--saturation_extra_depths` / `--min_reads_per_cell` / `--random_seed` / `--outdir` / `--help` params as `downsample.nf` — see `nextflow_schema_single_sample.json` for defaults.
+**Optional:** the same `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine` / `--run_saturation` / `--saturation_extra_depths` / `--min_reads_per_cell` / `--random_seed` / `--outdir` / `--help` params as `downsample.nf` — see `nextflow_schema_single_sample.json` for defaults.
 
 **Output**, under `${params.outdir}/${params.sample_id}/`:
 - **`gex_downsample/`**: one `<depth>rpc/` subdir per requested GEX depth, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
@@ -185,7 +182,7 @@ Both schemas declare the same full `resource_options`/`batch_basename` set (mark
 
 A few checks that can't be expressed in JSON Schema are enforced separately, right after schema validation:
 - `downsample.nf`: every samplesheet row needs non-empty `molecule_info_h5`/`filtered_barcodes_tsv`/`scrna_metrics_csv` when `--run_gex_downsample` is true (and likewise `crispr_h5ad` for `--run_crispr_downsample`); `--run_combine` requires both downsample stages enabled; `--run_saturation` requires `--run_gex_downsample`.
-- `downsample_single_sample.nf`: `--molecule_info_h5`/`--filtered_barcodes_tsv`/`--scrna_metrics_csv`/`--gex_target_depths` must be given when `--run_gex_downsample` is true (and likewise `--crispr_h5ad`/`--crispr_target_depths` for `--run_crispr_downsample`); same `--run_combine`/`--run_saturation` cross-checks as above.
+- `downsample_single_sample.nf`: `--input_files` must include a molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv (by filename suffix) and `--gex_target_depths` must be given when `--run_gex_downsample` is true (and likewise a crispr_h5ad in `--input_files`/`--crispr_target_depths` for `--run_crispr_downsample`); same `--run_combine`/`--run_saturation` cross-checks as above.
 
 **Don't add hand-rolled `if (!params.x) { exit 1 }` checks for anything expressible in JSON Schema** — add/edit the corresponding property (and its `required` list) in the relevant schema file instead, so ICA's rendered form and the pipeline's own validation never drift apart.
 

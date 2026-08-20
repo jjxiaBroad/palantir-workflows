@@ -1,9 +1,11 @@
 {
     "sample_id": "sample1",
-    "molecule_info_h5": "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.moleculeInfo.h5",
-    "filtered_barcodes_tsv": "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.filtered.barcodes.tsv.gz",
-    "scrna_metrics_csv": "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA_metrics.csv",
-    "crispr_h5ad": "stub_inputs/crispr_sample1.stub.h5ad",
+    "input_files": [
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.moleculeInfo.h5",
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA.filtered.barcodes.tsv.gz",
+        "stub_inputs/downsample_dragen_results/sample1/sample1.scRNA_metrics.csv",
+        "stub_inputs/crispr_sample1.stub.h5ad"
+    ],
     "gex_target_depths": [5000, 10000],
     "crispr_target_depths": [500, 1000],
     "run_saturation": true,
