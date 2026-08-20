@@ -1,18 +1,12 @@
 {
     "samplesheet": "/experiments/MDL-1898/downsample_batch/samplesheet.csv",
-    "molecule_info_h5s": [
+    "staged_files": [
         "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA.moleculeInfo.h5",
-        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA.moleculeInfo.h5"
-    ],
-    "filtered_barcodes_tsvs": [
+        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA.moleculeInfo.h5",
         "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA.filtered.barcodes.tsv.gz",
-        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA.filtered.barcodes.tsv.gz"
-    ],
-    "scrna_metrics_csvs": [
+        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA.filtered.barcodes.tsv.gz",
         "/experiments/MDL-1898/sample1/dragen_output/sample1.scRNA_metrics.csv",
-        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA_metrics.csv"
-    ],
-    "crispr_h5ads": [
+        "/experiments/MDL-1898/sample2/dragen_output/sample2.scRNA_metrics.csv",
         "/experiments/MDL-1898/sample1/adata/sample1.crispr.h5ad",
         "/experiments/MDL-1898/sample2/adata/sample2.crispr.h5ad"
     ],

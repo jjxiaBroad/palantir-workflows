@@ -614,10 +614,13 @@ class MoleculeInfo:
         """Turn a set of requested reads-per-cell values into (target_rpc,
         downsample_factor) lists that are safe to feed into the workers.
 
-        Values below ``min_reads_per_cell`` are dropped. Values that meet or
-        exceed the full-depth RPC would imply an upsample and are dropped as
-        well. The lists are returned in decreasing order of downsample factor
-        (i.e. highest depth first) to match the parent pipeline's convention.
+        Values below ``min_reads_per_cell`` are dropped. Values that exceed
+        the full-depth RPC would imply an upsample and are dropped as well.
+        A requested depth exactly at full depth (ratio == 1) is kept as a
+        no-op "downsample" -- this is the normal case for whichever sample
+        defines the batch's target depth. The lists are returned in
+        decreasing order of downsample factor (i.e. highest depth first) to
+        match the parent pipeline's convention.
         """
         target_rpcs = []
         factors = []
@@ -626,7 +629,7 @@ class MoleculeInfo:
                 if rpc < min_reads_per_cell:
                     continue
                 ratio = rpc / reads_per_cell_full
-                if ratio >= 1:
+                if ratio > 1:
                     continue
                 target_rpcs.append(rpc)
                 factors.append(ratio)

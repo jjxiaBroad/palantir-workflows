@@ -13,9 +13,10 @@ gRNA/CRISPR Guide Capture data has no meaningful binning index).
 
 The common target -- grna_target_mean_reads_per_cell -- defaults to the
 minimum mean reads/cell observed across the batch (or an explicit
---target-reads-per-cell override). This value (rounded to the nearest
-integer) is exactly what downsample_crispr_anndata.py --matrix-depths should
-be given for every sample in the batch.
+--target-reads-per-cell override). This value (rounded down to an integer --
+never up, so it never exceeds the minimum sample's own true depth) is
+exactly what downsample_crispr_anndata.py --matrix-depths should be given
+for every sample in the batch.
 
 Every samplesheet column other than sample_id/molecule_info_h5/
 scrna_metrics_csv/filtered_barcodes_tsv/features_tsv/crispr_h5ad is carried
@@ -31,6 +32,7 @@ Usage:
 """
 
 import argparse
+import math
 import sys
 
 import numpy as np
@@ -164,7 +166,11 @@ def main(argv=None):
     summary.to_csv(args.output, index=False)
     print(f"\nWrote gRNA summary to {args.output}")
 
-    target_depth = int(round(target_reads_per_cell))
+    # Round down, never up: this may be exactly the minimum sample's own
+    # depth, and rounding up would push the target past that sample's true
+    # depth, making it impossible to hit (see downsample_crispr_anndata.py's
+    # factor > 1 rejection).
+    target_depth = int(math.floor(target_reads_per_cell))
     with open(args.target_depth_output, "w") as fh:
         fh.write(f"{target_depth}\n")
     print(f"Resolved gRNA target depth: {target_depth} reads/cell -> {args.target_depth_output}")

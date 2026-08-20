@@ -12,10 +12,7 @@
             "description": "Define where the pipeline should find input data and save output data.",
             "required": [
                 "samplesheet",
-                "molecule_info_h5s",
-                "filtered_barcodes_tsvs",
-                "scrna_metrics_csvs",
-                "crispr_h5ads",
+                "staged_files",
                 "batch_id",
                 "batch_basename"
             ],
@@ -28,58 +25,15 @@
                     "help_text": "Columns: sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad. molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv are required per row when --run_gex_downsample is true; features_tsv is optional (only needed for a combined GEX+CRISPR molecule_info_h5); crispr_h5ad is required per row when --run_crispr_downsample is true. Any other column is treated as per-sample metadata and carried through into the downsample summary CSVs and the final combined AnnData's .obs.",
                     "fa_icon": "fas fa-file-csv"
                 },
-                "molecule_info_h5s": {
+                "staged_files": {
                     "type": "array",
                     "items": {
                         "type": "string",
                         "format": "file-path"
                     },
                     "minItems": 1,
-                    "description": "All DRAGEN scRNA molecule-info h5 files referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Not read directly by the pipeline -- --samplesheet's CSV already references these files by path. Declaring them here as their own input is what makes ICA localize them onto the compute node before the run starts.",
-                    "fa_icon": "fas fa-file"
-                },
-                "filtered_barcodes_tsvs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "file-path"
-                    },
-                    "minItems": 1,
-                    "description": "All DRAGEN filtered-barcodes files referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Same reasoning as --molecule_info_h5s, for the filtered_barcodes_tsv column.",
-                    "fa_icon": "fas fa-file"
-                },
-                "scrna_metrics_csvs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "file-path"
-                    },
-                    "minItems": 1,
-                    "description": "All DRAGEN scRNA_metrics.csv files referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Same reasoning as --molecule_info_h5s, for the scrna_metrics_csv column.",
-                    "fa_icon": "fas fa-file"
-                },
-                "features_tsvs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "file-path"
-                    },
-                    "description": "All DRAGEN raw features.tsv.gz files referenced by --samplesheet's (optional) features_tsv column (not used directly by the pipeline)",
-                    "help_text": "Same reasoning as --molecule_info_h5s, for the features_tsv column. Only needed for samples whose molecule_info_h5 is a combined GEX+CRISPR DRAGEN h5.",
-                    "fa_icon": "fas fa-file"
-                },
-                "crispr_h5ads": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "format": "file-path"
-                    },
-                    "minItems": 1,
-                    "description": "All crispr_h5ad files referenced by --samplesheet (not used directly by the pipeline)",
-                    "help_text": "Same reasoning as --molecule_info_h5s, for the crispr_h5ad column.",
+                    "description": "Every molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv/features_tsv/crispr_h5ad file referenced by --samplesheet, all in one list (not used directly by the pipeline)",
+                    "help_text": "Not read directly by the pipeline -- --samplesheet's CSV already references these files by path and is what assigns each one its role. Declaring them here as an input is what makes ICA localize them onto the compute node before the run starts; ICA matches samplesheet path entries to staged files by basename, so which field a file was selected through doesn't matter.",
                     "fa_icon": "fas fa-file"
                 },
                 "batch_id": {

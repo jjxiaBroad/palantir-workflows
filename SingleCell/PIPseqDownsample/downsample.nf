@@ -35,19 +35,14 @@ def helpMessage() {
     Required arguments:
       --samplesheet              CSV describing the batch (columns: sample_id, molecule_info_h5,
                                   filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad, +metadata)
-      --molecule_info_h5s        All molecule_info_h5 files referenced by --samplesheet (needed so ICA localizes them onto the compute node; not read directly by the pipeline)
-      --filtered_barcodes_tsvs   All filtered_barcodes_tsv files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
-      --scrna_metrics_csvs       All scrna_metrics_csv files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
-      --crispr_h5ads             All crispr_h5ad files referenced by --samplesheet (same reasoning as --molecule_info_h5s)
+      --staged_files             Every molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv/
+                                  features_tsv/crispr_h5ad file referenced by --samplesheet, all in one
+                                  list (needed so ICA localizes them onto the compute node; not read
+                                  directly by the pipeline -- --samplesheet's CSV is what actually
+                                  assigns each file its role)
       --batch_id                 Batch identifier
       --batch_basename           Batch basename for output organization
       --qc_container             Container image for QC/downsample processing
-
-    Optional data arguments:
-      --features_tsvs            All features_tsv files referenced by --samplesheet, for any row that
-                                  sets one -- only needed when a sample's molecule_info_h5 is a combined
-                                  GEX+CRISPR DRAGEN h5 (see downsample_molecule_info.py); same
-                                  localization reasoning as --molecule_info_h5s
 
     Samplesheet format:
       CSV file with columns: sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad
@@ -110,12 +105,9 @@ def writeOutputManifest() {
 // Define parameters
 params.samplesheet = null              // CSV: sample_id, molecule_info_h5, filtered_barcodes_tsv,
                                         // scrna_metrics_csv, features_tsv, crispr_h5ad, +metadata columns
-params.molecule_info_h5s = null        // Unused by the pipeline directly -- exists so ICA localizes the
-                                        // files referenced by path inside --samplesheet's CSV.
-params.filtered_barcodes_tsvs = null   // Same idea as --molecule_info_h5s, for the filtered_barcodes_tsv column.
-params.scrna_metrics_csvs = null       // Same idea as --molecule_info_h5s, for the scrna_metrics_csv column.
-params.features_tsvs = []              // Same idea as --molecule_info_h5s, for the (optional) features_tsv column.
-params.crispr_h5ads = null             // Same idea as --molecule_info_h5s, for the crispr_h5ad column.
+params.staged_files = null             // Unused by the pipeline directly -- exists so ICA localizes every
+                                        // file referenced by path inside --samplesheet's CSV (molecule_info_h5,
+                                        // filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad).
 // batch_id/batch_basename are intentionally not declared here (same convention as
 // main.nf's supersample_id/supersample_basename) -- batch_basename's default lives in
 // nextflow.config (needed early, for the timeline/report/trace/dag file paths), and

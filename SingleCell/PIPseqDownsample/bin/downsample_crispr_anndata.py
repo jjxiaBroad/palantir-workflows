@@ -136,8 +136,10 @@ def check_looks_like_raw_counts(mat, quiet=False):
 
 def compute_downsample_targets(reads_per_cell_full, requested_rpcs, min_reads_per_cell):
     """Turn requested reads-per-cell values into (target_rpc, factor) pairs,
-    deepest-first. Values below min_reads_per_cell, or at/above full depth
-    (which would mean upsampling), are dropped."""
+    deepest-first. Values below min_reads_per_cell, or above full depth
+    (which would mean upsampling), are dropped. A requested depth exactly at
+    full depth (factor == 1) is kept as a no-op "downsample" -- this is the
+    normal case for whichever sample defines the batch's target depth."""
     target_rpcs = []
     factors = []
     if reads_per_cell_full > 0:
@@ -145,7 +147,7 @@ def compute_downsample_targets(reads_per_cell_full, requested_rpcs, min_reads_pe
             if rpc < min_reads_per_cell:
                 continue
             factor = rpc / reads_per_cell_full
-            if factor >= 1:
+            if factor > 1:
                 continue
             target_rpcs.append(rpc)
             factors.append(factor)

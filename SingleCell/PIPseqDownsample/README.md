@@ -95,10 +95,7 @@ nextflow run ../downsample_single_sample.nf -stub-run -params-file stub_inputs/p
 ```bash
 nextflow run downsample.nf \
   --samplesheet samplesheet.csv \
-  --molecule_info_h5s sample1/sample1.scRNA.moleculeInfo.h5,sample2/sample2.scRNA.moleculeInfo.h5 \
-  --filtered_barcodes_tsvs sample1/sample1.scRNA.filtered.barcodes.tsv.gz,sample2/sample2.scRNA.filtered.barcodes.tsv.gz \
-  --scrna_metrics_csvs sample1/sample1.scRNA_metrics.csv,sample2/sample2.scRNA_metrics.csv \
-  --crispr_h5ads sample1/adata/sample1.crispr.h5ad,sample2/adata/sample2.crispr.h5ad \
+  --staged_files sample1/sample1.scRNA.moleculeInfo.h5,sample1/sample1.scRNA.filtered.barcodes.tsv.gz,sample1/sample1.scRNA_metrics.csv,sample1/adata/sample1.crispr.h5ad,sample2/sample2.scRNA.moleculeInfo.h5,sample2/sample2.scRNA.filtered.barcodes.tsv.gz,sample2/sample2.scRNA_metrics.csv,sample2/adata/sample2.crispr.h5ad \
   --batch_id "Batch_A" \
   --batch_basename "batch_a" \
   --qc_container <qc image> \
@@ -120,16 +117,12 @@ sample2,/path/to/sample2/sample2.scRNA.moleculeInfo.h5,/path/to/sample2/sample2.
 
 **Required:**
 - `--samplesheet`: CSV described above
-- `--molecule_info_h5s`: All `molecule_info_h5` files referenced by `--samplesheet`'s CSV. Not read by the pipeline itself — it's what makes ICA localize those files onto the compute node (ICA has no way to know the CSV references them otherwise).
-- `--filtered_barcodes_tsvs`: All `filtered_barcodes_tsv` files referenced by `--samplesheet`'s CSV — same reasoning as `--molecule_info_h5s`.
-- `--scrna_metrics_csvs`: All `scrna_metrics_csv` files referenced by `--samplesheet`'s CSV — same reasoning as `--molecule_info_h5s`.
-- `--crispr_h5ads`: All `crispr_h5ad` files referenced by `--samplesheet`'s CSV — same reasoning as `--molecule_info_h5s`.
+- `--staged_files`: Every `molecule_info_h5`/`filtered_barcodes_tsv`/`scrna_metrics_csv`/`features_tsv`/`crispr_h5ad` file referenced by `--samplesheet`'s CSV, all in one list. Not read by the pipeline itself — it's what makes ICA localize those files onto the compute node (ICA has no way to know the CSV references them otherwise); the samplesheet's CSV is what actually assigns each file its role, matched by filename once staged, so a file can be listed here in any order.
 - `--batch_id`: Batch identifier
 - `--batch_basename`: Batch basename for output organization
 - `--qc_container`: Container image for QC/downsample processing
 
 **Optional:**
-- `--features_tsvs`: All `features_tsv` files referenced by `--samplesheet`'s CSV, for any row that sets one — same reasoning as `--molecule_info_h5s`
 - `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine`: toggle each stage (defaults: all `true`; `--run_combine` requires both downsample stages to be enabled)
 - `--gex_target_depth` / `--crispr_target_depth`: override the auto-computed common target
 - `--run_saturation` / `--saturation_extra_depths`: see [GEX sequencing-saturation sweep](#gex-sequencing-saturation-sweep---run_saturation-both-entrypoints) above (default: `false`; requires `--run_gex_downsample`)

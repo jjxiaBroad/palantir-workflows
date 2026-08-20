@@ -18,53 +18,9 @@
     },
     {
       "type": "data",
-      "id": "molecule_info_h5s",
-      "helpText": "All DRAGEN scRNA molecule-info h5 files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
-      "label": "molecule_info_h5s",
-      "minValues": 1,
-      "maxValues": 999,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "filtered_barcodes_tsvs",
-      "helpText": "All DRAGEN filtered-barcodes files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
-      "label": "filtered_barcodes_tsvs",
-      "minValues": 1,
-      "maxValues": 999,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "scrna_metrics_csvs",
-      "helpText": "All DRAGEN scRNA_metrics.csv files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
-      "label": "scrna_metrics_csvs",
-      "minValues": 1,
-      "maxValues": 999,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "features_tsvs",
-      "helpText": "All DRAGEN raw features.tsv.gz files referenced by samplesheet's (optional) features_tsv column -- required so ICA localizes them onto the compute node, only needed for combined GEX+CRISPR molecule-info h5s. Not read directly by the pipeline.",
-      "label": "features_tsvs",
-      "minValues": 0,
-      "maxValues": 999,
-      "dataFilter": {
-        "dataType": "file"
-      }
-    },
-    {
-      "type": "data",
-      "id": "crispr_h5ads",
-      "helpText": "All crispr_h5ad files referenced by samplesheet's CSV -- required so ICA localizes them onto the compute node. Not read directly by the pipeline.",
-      "label": "crispr_h5ads",
+      "id": "staged_files",
+      "helpText": "Every molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, and crispr_h5ad file referenced by samplesheet's CSV, all selected here together -- required so ICA localizes them onto the compute node. Not read directly by the pipeline; the samplesheet's CSV is what assigns each file its role, matched by filename once staged, so files can be selected in any order and (for a given sample) in one pass through its folder.",
+      "label": "staged_files",
       "minValues": 1,
       "maxValues": 999,
       "dataFilter": {
