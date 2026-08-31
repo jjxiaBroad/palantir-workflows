@@ -11,6 +11,7 @@ params.min_reads_per_cell = 1
 params.random_seed = 42
 params.run_saturation = false
 params.saturation_extra_depths = []
+params.gex_matrix_format = 'both'
 
 process DOWNSAMPLE_MOLECULE_INFO {
     tag "${meta.sample_id}"
@@ -36,8 +37,9 @@ process DOWNSAMPLE_MOLECULE_INFO {
     // Aggregate combine steps collect one of these per sample into a list -- since every
     // sample's output dir has the same basename ("downsampled_matrix"), those steps stage
     // this input with stageAs to avoid a name collision, rather than this process embedding
-    // sample_id into the dir name itself. One <depth>rpc/filtered_matrix/ subdir is written
-    // per requested depth in meta.target_depths.
+    // sample_id into the dir name itself. One <depth>rpc/ subdir is written per requested depth
+    // in meta.target_depths, holding a raw_matrix/ and/or filtered_matrix/ layout depending on
+    // --gex_matrix_format.
     tuple val(meta.sample_id), path("downsampled_matrix"), emit: matrices
     tuple val(meta.sample_id), path("saturation.csv"), emit: saturation_csv, optional: true
 
@@ -55,18 +57,21 @@ process DOWNSAMPLE_MOLECULE_INFO {
         --scrna-metrics-csv ${scrna_metrics_csv} \\
         --output-dir . \\
         --matrix-depths ${meta.target_depths.join(' ')} \\
-        --matrix-format filtered \\
+        --matrix-format ${params.gex_matrix_format} \\
         --min-reads-per-cell ${params.min_reads_per_cell} \\
         --random-seed ${params.random_seed} \\
         --threads ${task.cpus}${saturation_args}${features_args}
     """
 
     stub:
-    def depth_dirs = meta.target_depths.collect { depth ->
-        "mkdir -p downsampled_matrix/${depth}rpc/filtered_matrix\n" +
-        "    touch downsampled_matrix/${depth}rpc/filtered_matrix/matrix.mtx.gz\n" +
-        "    touch downsampled_matrix/${depth}rpc/filtered_matrix/barcodes.tsv.gz\n" +
-        "    touch downsampled_matrix/${depth}rpc/filtered_matrix/features.tsv.gz"
+    def layouts = params.gex_matrix_format == 'both' ? ['raw_matrix', 'filtered_matrix'] : ["${params.gex_matrix_format}_matrix"]
+    def depth_dirs = meta.target_depths.collectMany { depth ->
+        layouts.collect { layout ->
+            "mkdir -p downsampled_matrix/${depth}rpc/${layout}\n" +
+            "    touch downsampled_matrix/${depth}rpc/${layout}/matrix.mtx.gz\n" +
+            "    touch downsampled_matrix/${depth}rpc/${layout}/barcodes.tsv.gz\n" +
+            "    touch downsampled_matrix/${depth}rpc/${layout}/features.tsv.gz"
+        }
     }.join('\n    ')
     def saturation_stub = params.run_saturation ? 'touch saturation.csv' : ''
     """

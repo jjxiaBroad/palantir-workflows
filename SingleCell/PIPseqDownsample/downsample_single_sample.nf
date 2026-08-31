@@ -11,7 +11,9 @@ nextflow.enable.dsl=2
  * It:
  *   1. Downsamples the sample's GEX molecule-info and/or gRNA AnnData to every requested depth.
  *   2. Combines the downsampled GEX + gRNA data across depths into one AnnData annotated with
- *      an integer `depth` column, for within-sample cross-depth analysis.
+ *      integer `depth` and `modality` columns, for within-sample cross-depth analysis. Every
+ *      depth either modality produced is included -- the two modalities' depth lists are
+ *      independent and need not line up.
  */
 
 include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
@@ -57,19 +59,27 @@ def helpMessage() {
                                   requires --run_gex_downsample)
       --saturation_extra_depths   Extra reads-per-cell depths for the saturation sweep, beyond
                                   the script's built-in ladder
+      --gex_matrix_format         Which GEX matrix layout(s) to write per depth: raw (all
+                                  barcodes), filtered (cells only), or both (default: both).
+                                  --run_combine reads the filtered layout, so it can't be
+                                  used with raw
       --min_reads_per_cell       Floor below which a requested depth is dropped (default: 1)
       --random_seed              Seed for the downsampling draws (default: 42)
       --outdir                   Output directory (default: out)
       --help                     Show this help message
 
     Behavior:
-      - Downsamples the sample's GEX molecule-info (filtered-matrix layout only) and/or gRNA
+      - Downsamples the sample's GEX molecule-info (raw and/or filtered matrix layout, see
+        --gex_matrix_format) and/or gRNA
         AnnData to every depth in --gex_target_depths / --crispr_target_depths, under
         gex_downsample/ and crispr_downsample/
       - If --run_saturation is set, also writes saturation.csv alongside the downsampled GEX
         matrix (median transcripts/genes and % sequencing saturation across a depth ladder)
       - Combines the downsampled GEX+gRNA across depths into one AnnData under combined/,
-        annotated with an integer depth column -- only if both branches ran
+        annotated with integer depth and modality columns -- only if both branches ran.
+        Every depth either modality produced is kept; --gex_target_depths and
+        --crispr_target_depths need not match, and a depth present in only one modality
+        gets the other's features zero-filled (.obs.modality says which)
     """.stripIndent()
 }
 
@@ -78,13 +88,17 @@ def writeOutputManifest() {
     manifest.text = """
         Output layout for sample '${params.sample_id}':
 
-          gex_downsample/     Downsampled GEX filtered matrix, one <depth>rpc/ subdir per
-                               requested depth, plus saturation.csv if --run_saturation true
-                               (only if --run_gex_downsample true)
+          gex_downsample/     Downsampled GEX matrix, one <depth>rpc/ subdir per requested
+                               depth holding raw_matrix/ and/or filtered_matrix/ per
+                               --gex_matrix_format, plus saturation.csv if --run_saturation
+                               true (only if --run_gex_downsample true)
           crispr_downsample/  Downsampled gRNA AnnData, one <depth>rpc.h5ad file per requested
                                depth (only if --run_crispr_downsample true)
           combined/            Combined AnnData across depths (<sample_id>.depths_combined.h5ad),
-                               annotated with an integer depth column (only if --run_combine true)
+                               annotated with integer depth and modality columns; a depth present
+                               in only one modality has the other's features zero-filled, so
+                               filter on .obs['modality'] before reading those zeros as measured
+                               counts (only if --run_combine true)
           pipeline_info/       Nextflow execution reports (timeline, report, trace, DAG)
 
         See README.md in the pipeline repository for parameter and output details.
@@ -150,6 +164,7 @@ params.gex_target_depths = []          // GEX target reads/cell depths
 params.crispr_target_depths = []       // gRNA target reads/cell depths
 params.run_saturation = false          // Also run a GEX sequencing-saturation sweep
 params.saturation_extra_depths = []    // Extra reads-per-cell depths for the saturation sweep
+params.gex_matrix_format = 'both'      // Which GEX matrix layout(s) to write: raw, filtered, or both
 params.min_reads_per_cell = 1          // Floor below which a requested depth is dropped
 params.random_seed = 42                // Seed for the downsampling draws
 
@@ -190,6 +205,11 @@ workflow {
     }
     if (params.run_saturation && !params.run_gex_downsample) {
         log.error "ERROR: --run_saturation requires --run_gex_downsample to be true."
+        exit 1
+    }
+    if (params.run_combine && params.gex_matrix_format == 'raw') {
+        log.error "ERROR: --run_combine reads each depth's filtered_matrix/ layout, so it is " +
+            "incompatible with --gex_matrix_format raw. Use 'filtered' or 'both'."
         exit 1
     }
 

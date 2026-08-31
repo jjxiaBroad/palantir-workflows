@@ -90,6 +90,14 @@
       "min": 1
     },
     {
+      "type": "textbox",
+      "id": "gex_matrix_format",
+      "helpText": "Which GEX matrix layout(s) to write per depth: raw (all barcodes), filtered (cells only), or both. run_combine reads the filtered layout, so it cannot be used with raw.",
+      "minValues": 1,
+      "maxValues": 1,
+      "value": "both"
+    },
+    {
       "type": "integer",
       "id": "min_reads_per_cell",
       "minValues": 1,

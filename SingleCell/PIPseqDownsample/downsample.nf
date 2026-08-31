@@ -62,6 +62,9 @@ def helpMessage() {
       --crispr_target_depth      Override the common gRNA target reads/cell (default: minimum observed across the batch)
       --run_saturation           Also run a GEX sequencing-saturation sweep per sample (default: false; requires --run_gex_downsample)
       --saturation_extra_depths  Extra reads-per-cell depths to include in the saturation sweep, beyond the script's built-in ladder
+      --gex_matrix_format        Which GEX matrix layout(s) to write per depth: raw (all barcodes),
+                                  filtered (cells only), or both (default: both). --run_combine
+                                  reads the filtered layout, so it can't be used with raw
       --min_reads_per_cell       Floor below which a requested depth is dropped (default: 1)
       --random_seed              Seed for the downsampling draws (default: 42)
       --outdir                   Output directory (default: out)
@@ -70,7 +73,8 @@ def helpMessage() {
     Behavior:
       - Resolves one common GEX target depth and one common gRNA target depth for the whole batch,
         publishing a summary CSV for each under gex_downsample_summary/ and grna_downsample_summary/
-      - Downsamples every sample's GEX molecule-info (filtered-matrix layout only) and/or gRNA AnnData
+      - Downsamples every sample's GEX molecule-info (raw and/or filtered matrix layout, see
+        --gex_matrix_format) and/or gRNA AnnData
         to those targets, under <sample_id>/gex_downsample/ and <sample_id>/crispr_downsample/
       - If --run_saturation is set, also writes a saturation.csv per sample alongside its downsampled
         GEX matrix (median transcripts/genes and % sequencing saturation across a depth ladder)
@@ -88,9 +92,10 @@ def writeOutputManifest() {
                                            depth (only if --run_gex_downsample true)
           grna_downsample_summary/        Batch-wide gRNA metrics summary + resolved common target
                                            depth (only if --run_crispr_downsample true)
-          <sample_id>/gex_downsample/     That sample's downsampled GEX filtered matrix, plus
-                                           saturation.csv if --run_saturation true (only if
-                                           --run_gex_downsample true)
+          <sample_id>/gex_downsample/     That sample's downsampled GEX matrix, one <depth>rpc/
+                                           subdir holding raw_matrix/ and/or filtered_matrix/ per
+                                           --gex_matrix_format, plus saturation.csv if
+                                           --run_saturation true (only if --run_gex_downsample true)
           <sample_id>/crispr_downsample/  That sample's downsampled gRNA AnnData (only if
                                            --run_crispr_downsample true)
           combined/                       Combined AnnData for the whole batch (<basename>.combined.h5ad),
@@ -122,6 +127,7 @@ params.gex_target_depth = null         // Optional override for the common GEX t
 params.crispr_target_depth = null      // Optional override for the common gRNA target (reads/cell)
 params.run_saturation = false          // Also run a GEX sequencing-saturation sweep per sample
 params.saturation_extra_depths = []    // Extra reads-per-cell depths for the saturation sweep
+params.gex_matrix_format = 'both'      // Which GEX matrix layout(s) to write: raw, filtered, or both
 params.min_reads_per_cell = 1          // Floor below which a requested depth is dropped
 params.random_seed = 42                // Seed for the downsampling draws
 
@@ -179,6 +185,11 @@ workflow {
             }
             if (params.run_saturation && !params.run_gex_downsample) {
                 log.error "ERROR: --run_saturation requires --run_gex_downsample to be true."
+                exit 1
+            }
+            if (params.run_combine && params.gex_matrix_format == 'raw') {
+                log.error "ERROR: --run_combine reads each depth's filtered_matrix/ layout, so it is " +
+                    "incompatible with --gex_matrix_format raw. Use 'filtered' or 'both'."
                 exit 1
             }
             rows

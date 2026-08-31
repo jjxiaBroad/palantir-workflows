@@ -111,6 +111,18 @@
                     "help_text": "Ignored unless --run_saturation is set.",
                     "fa_icon": "fas fa-bullseye"
                 },
+                "gex_matrix_format": {
+                    "type": "string",
+                    "description": "Which GEX matrix layout(s) to write per depth",
+                    "help_text": "\"raw\" writes the full unfiltered barcode matrix, \"filtered\" only the cells in the DRAGEN filtered-barcodes list, \"both\" writes both under raw_matrix/ and filtered_matrix/ subdirs of each <depth>rpc/ folder. --run_combine reads the filtered layout, so it cannot be used with \"raw\".",
+                    "default": "both",
+                    "enum": [
+                        "raw",
+                        "filtered",
+                        "both"
+                    ],
+                    "fa_icon": "fas fa-table"
+                },
                 "min_reads_per_cell": {
                     "type": "integer",
                     "description": "Floor below which a requested depth is dropped",
