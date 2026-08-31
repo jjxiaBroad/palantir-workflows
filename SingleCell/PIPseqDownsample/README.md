@@ -17,7 +17,7 @@ The pipelines are designed to run on Illumina Connected Analytics (ICA) but are 
 Given a `--samplesheet` (columns: `sample_id, molecule_info_h5, filtered_barcodes_tsv, scrna_metrics_csv, features_tsv, crispr_h5ad`, plus any per-sample metadata columns) describing a batch of samples:
 
 1. Resolves one common GEX target depth and one common gRNA target depth for the whole batch — each independently defaults to the minimum "mean reads per cell" observed across the batch (you can only downsample down, never up), or an explicit `--gex_target_depth`/`--crispr_target_depth` override. Published as `gex_downsample_summary.csv`/`grna_downsample_summary.csv` (useful on their own, as a batch depth-landscape report).
-2. Downsamples every sample's GEX molecule-info (filtered-matrix layout, via `bin/downsample_molecule_info.py`'s IMI-based downsampler) and/or gRNA AnnData (via `bin/downsample_crispr_anndata.py`'s binomial-thinning downsampler) to those targets. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep per sample (see below).
+2. Downsamples every sample's GEX molecule-info (raw and/or filtered matrix layout per `--gex_matrix_format`, via `bin/downsample_molecule_info.py`'s IMI-based downsampler) and/or gRNA AnnData (via `bin/downsample_crispr_anndata.py`'s binomial-thinning downsampler) to those targets. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep per sample (see below).
 3. Combines every sample's downsampled GEX + gRNA data into one AnnData (`bin/combine_downsampled_batch.py`) — only if both branches ran (`--run_combine`, default `true`). Barcodes between a sample's filtered GEX and gRNA are expected to already match; a mismatch is reported as a warning (only the shared barcodes are kept) rather than failing the run.
 
 ### Single-sample multi-depth (`downsample_single_sample.nf`)
@@ -25,7 +25,7 @@ Given a `--samplesheet` (columns: `sample_id, molecule_info_h5, filtered_barcode
 Given one sample's `--input_files` (molecule_info_h5/filtered_barcodes_tsv/scrna_metrics_csv and/or crispr_h5ad, role auto-detected per file — see below), plus one or more `--gex_target_depths`/`--crispr_target_depths`:
 
 1. Downsamples the sample's GEX molecule-info and/or gRNA AnnData to *every* requested depth (one downsampled matrix/AnnData per depth), via the same two scripts `downsample.nf` uses. If `--run_saturation` is set, also runs a GEX sequencing-saturation sweep (see below).
-2. Combines the downsampled GEX + gRNA data *across depths* into one AnnData (`bin/combine_downsampled_depths.py`), annotated with an integer `depth` column — only if both branches ran (`--run_combine`, default `true`).
+2. Combines the downsampled GEX + gRNA data *across depths* into one AnnData (`bin/combine_downsampled_depths.py`), annotated with integer `depth` and `modality` columns — only if both branches ran (`--run_combine`, default `true`). Every depth either modality produced is included: `--gex_target_depths` and `--crispr_target_depths` are independent and need not line up. A depth carrying both modalities is merged on the feature axis (`modality == "gex+grna"`); a depth carrying only one has the other's features zero-filled (`modality == "gex"` / `"grna"`), so filter on `.obs['modality']` before treating those zeros as measured counts.
 
 ### GEX sequencing-saturation sweep (`--run_saturation`, both entrypoints)
 
@@ -126,6 +126,7 @@ sample2,/path/to/sample2/sample2.scRNA.moleculeInfo.h5,/path/to/sample2/sample2.
 - `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine`: toggle each stage (defaults: all `true`; `--run_combine` requires both downsample stages to be enabled)
 - `--gex_target_depth` / `--crispr_target_depth`: override the auto-computed common target
 - `--run_saturation` / `--saturation_extra_depths`: see [GEX sequencing-saturation sweep](#gex-sequencing-saturation-sweep---run_saturation-both-entrypoints) above (default: `false`; requires `--run_gex_downsample`)
+- `--gex_matrix_format`: which GEX matrix layout(s) to write per depth — `raw` (all barcodes), `filtered` (cells in the DRAGEN filtered-barcodes list), or `both` (default: `both`). `--run_combine` reads the filtered layout, so it can't be used with `raw`
 - `--min_reads_per_cell`: floor below which a requested depth is dropped (default: `1`)
 - `--random_seed`: seed for the downsampling draws (default: `42`)
 - Resource params for each process — see `nextflow_schema.json` for defaults
@@ -135,7 +136,7 @@ sample2,/path/to/sample2/sample2.scRNA.moleculeInfo.h5,/path/to/sample2/sample2.
 **Output**, under `${params.outdir}/${params.batch_basename}/`:
 - **`gex_downsample_summary/`**: batch-wide GEX metrics summary + resolved common target depth (only if `--run_gex_downsample true`)
 - **`grna_downsample_summary/`**: batch-wide gRNA metrics summary + resolved common target depth (only if `--run_crispr_downsample true`)
-- **`<sample_id>/gex_downsample/`**: that sample's downsampled GEX filtered matrix, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
+- **`<sample_id>/gex_downsample/`**: that sample's downsampled GEX matrix — `downsampled_matrix/<depth>rpc/` holding `raw_matrix/` and/or `filtered_matrix/` per `--gex_matrix_format` — plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
 - **`<sample_id>/crispr_downsample/`**: that sample's downsampled gRNA AnnData (only if `--run_crispr_downsample true`)
 - **`combined/<batch_basename>.combined.h5ad`**: the final combined, metadata-annotated AnnData (only if `--run_combine true`)
 - **`pipeline_info/`**: Nextflow reports (`timeline.html`, `report.html`, `trace.txt`, `dag.svg`)
@@ -164,12 +165,12 @@ nextflow run downsample_single_sample.nf \
 - `--crispr_target_depths`: one or more gRNA target reads/cell depths (required when `--run_crispr_downsample` is `true`)
 - `--qc_container`: Container image for QC/downsample processing
 
-**Optional:** the same `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine` / `--run_saturation` / `--saturation_extra_depths` / `--min_reads_per_cell` / `--random_seed` / `--outdir` / `--help` params as `downsample.nf` — see `nextflow_schema_single_sample.json` for defaults.
+**Optional:** the same `--run_gex_downsample` / `--run_crispr_downsample` / `--run_combine` / `--run_saturation` / `--saturation_extra_depths` / `--gex_matrix_format` / `--min_reads_per_cell` / `--random_seed` / `--outdir` / `--help` params as `downsample.nf` — see `nextflow_schema_single_sample.json` for defaults.
 
 **Output**, under `${params.outdir}/${params.sample_id}/`:
-- **`gex_downsample/`**: one `<depth>rpc/` subdir per requested GEX depth, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
+- **`gex_downsample/`**: one `<depth>rpc/` subdir per requested GEX depth, each holding `raw_matrix/` and/or `filtered_matrix/` per `--gex_matrix_format`, plus `saturation.csv` if `--run_saturation true` (only if `--run_gex_downsample true`)
 - **`crispr_downsample/`**: one `<depth>rpc.h5ad` file per requested gRNA depth (only if `--run_crispr_downsample true`)
-- **`combined/<sample_id>.depths_combined.h5ad`**: the combined, depth-annotated AnnData (only if `--run_combine true`)
+- **`combined/<sample_id>.depths_combined.h5ad`**: the combined AnnData across every depth either modality produced, annotated with `depth`, `modality` and `sample_id` (only if `--run_combine true`)
 - **`pipeline_info/`**: Nextflow reports, nested under `batch_basename`'s config-level default rather than `sample_id` — a cosmetic-only quirk (see the comment in `nextflow.config`); every actual data output above already publishes under `sample_id` correctly
 
 A `README.txt` describing this layout is written directly into `${params.outdir}/${params.sample_id}/` when the run finishes successfully.

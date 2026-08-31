@@ -3,18 +3,28 @@
 across multiple depths into a single AnnData, for within-sample depth-response
 analysis (e.g. how per-cell metrics change across a depth series).
 
-For each depth present in *both* the GEX matrix dir (written by
-downsample_molecule_info.py under <gex-matrix-dir>/<depth>rpc/filtered_matrix/)
-and the gRNA h5ad dir (written by downsample_crispr_anndata.py under
-<crispr-h5ad-dir>/<depth>rpc.h5ad): normalize the trailing 10x barcode suffix
-on both sides so barcodes line up, then merge the two modalities along the
-feature axis (inner join on barcode) -- the same per-unit merge
-combine_downsampled_batch.py does per sample, shared via
-downsample_combine_common.py.
+Every depth written by either modality ends up in the output -- the GEX depths
+(written by downsample_molecule_info.py under
+<gex-matrix-dir>/<depth>rpc/filtered_matrix/) and the gRNA depths (written by
+downsample_crispr_anndata.py under <crispr-h5ad-dir>/<depth>rpc.h5ad) are
+independent params on different scales, so they are *not* required to line up.
 
-All depths are then concatenated along the cell axis into one combined
-AnnData, with an integer `depth` column and a constant `sample_id` column
-attached to .obs.
+Per depth, one cell-axis block is built from whatever that depth has:
+
+  - both modalities  -> barcodes normalized on both sides, then merged along
+                        the feature axis (inner join on barcode), the same
+                        per-unit merge combine_downsampled_batch.py does per
+                        sample (shared via downsample_combine_common.py);
+                        .obs.modality == "gex+grna"
+  - GEX only         -> that depth's GEX matrix alone; .obs.modality == "gex"
+  - gRNA only        -> that depth's gRNA AnnData alone; .obs.modality == "grna"
+
+Blocks are then concatenated along the cell axis (outer join on features,
+missing modality zero-filled) into one AnnData, with integer `depth`,
+`modality` and constant `sample_id` columns attached to .obs. Because a
+single-modality block has no counts at all for the other modality's features,
+`modality` is what distinguishes a structural zero there from a measured zero
+-- filter on it before comparing feature sets across depths.
 
 Usage:
     python combine_downsampled_depths.py \\
@@ -31,7 +41,12 @@ import sys
 
 import anndata as ad
 
-from downsample_combine_common import load_gex_from_matrix_dir, load_downsampled_grna_from_h5ad, merge_gex_and_grna
+from downsample_combine_common import (
+    load_gex_from_matrix_dir,
+    load_downsampled_grna_from_h5ad,
+    merge_gex_and_grna,
+    normalize_barcodes,
+)
 
 GEX_DEPTH_DIR_RE = re.compile(r"^(\d+)rpc$")
 CRISPR_DEPTH_FILE_RE = re.compile(r"^(\d+)rpc\.h5ad$")
@@ -93,36 +108,63 @@ def main(argv=None):
     gex_depths = discover_gex_depths(args.gex_matrix_dir)
     crispr_depths = discover_crispr_depths(args.crispr_h5ad_dir)
 
-    common_depths = sorted(set(gex_depths) & set(crispr_depths))
-    gex_only = sorted(set(gex_depths) - set(crispr_depths))
-    crispr_only = sorted(set(crispr_depths) - set(gex_depths))
-    if gex_only or crispr_only:
-        print(
-            f"WARNING: depths present in only one modality are skipped -- "
-            f"GEX-only: {gex_only}, gRNA-only: {crispr_only}",
-            file=sys.stderr,
-        )
-    if not common_depths:
+    all_depths = sorted(set(gex_depths) | set(crispr_depths))
+    if not all_depths:
         raise FileNotFoundError(
-            f"No depth present in both {args.gex_matrix_dir} and {args.crispr_h5ad_dir}."
+            f"No downsampled depth found in either {args.gex_matrix_dir} or "
+            f"{args.crispr_h5ad_dir}."
         )
+    print(
+        f"GEX depths found: {sorted(gex_depths)}\n"
+        f"gRNA depths found: {sorted(crispr_depths)}\n"
+        f"Combining all {len(all_depths)} depth(s): {all_depths}"
+    )
 
     per_depth = []
-    for depth in common_depths:
-        gex = load_gex_from_matrix_dir(gex_depths[depth])
-        grna = load_downsampled_grna_from_h5ad(crispr_depths[depth])
-        per_depth.append(merge_gex_and_grna(gex, grna, label=f"{args.sample_id} @ {depth}rpc"))
+    modalities = []
+    for depth in all_depths:
+        label = f"{args.sample_id} @ {depth}rpc"
+        gex_dir = gex_depths.get(depth)
+        crispr_h5ad = crispr_depths.get(depth)
+        if gex_dir is not None and crispr_h5ad is not None:
+            gex = load_gex_from_matrix_dir(gex_dir)
+            grna = load_downsampled_grna_from_h5ad(crispr_h5ad)
+            block = merge_gex_and_grna(gex, grna, label=label)
+            modality = "gex+grna"
+        elif gex_dir is not None:
+            block = normalize_barcodes(load_gex_from_matrix_dir(gex_dir))
+            modality = "gex"
+            print(f"{label}: GEX only {block.shape} (no gRNA h5ad at this depth)")
+        else:
+            block = normalize_barcodes(load_downsampled_grna_from_h5ad(crispr_h5ad))
+            modality = "grna"
+            print(f"{label}: gRNA only {block.shape} (no GEX matrix at this depth)")
+        block.obs["modality"] = modality
+        per_depth.append(block)
+        modalities.append(modality)
 
+    # join="outer" so single-modality depths keep their own features and get the other
+    # modality's zero-filled; fill_value=0 keeps X sparse (the default would give NaN).
     combined = ad.concat(
         per_depth,
         axis=0,
         join="outer",
         label="depth",
-        keys=[str(depth) for depth in common_depths],
+        keys=[str(depth) for depth in all_depths],
         index_unique="_",
+        fill_value=0,
     )
     combined.obs["depth"] = combined.obs["depth"].astype(int)
     combined.obs["sample_id"] = args.sample_id
+
+    if set(modalities) != {"gex+grna"}:
+        print(
+            "WARNING: not every depth has both modalities -- "
+            f"{modalities.count('gex')} GEX-only and {modalities.count('grna')} gRNA-only "
+            "depth(s) are included with the other modality's features zero-filled. "
+            "Filter on .obs['modality'] before treating those zeros as measured counts.",
+            file=sys.stderr,
+        )
 
     print(f"\nFinal combined AnnData: {combined}")
     combined.write_h5ad(args.output_h5ad, compression="gzip")
